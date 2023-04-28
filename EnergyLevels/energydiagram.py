@@ -11,6 +11,7 @@ r|  3\__/       6\__
 g|
 y|
 @author: Giacomo Marchioro giacomomarchioro@outlook.com
+https://github.com/giacomomarchioro/PyEnergyDiagrams
 
 """
 import matplotlib as mpl
