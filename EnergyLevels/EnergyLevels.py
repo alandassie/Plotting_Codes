@@ -10,6 +10,7 @@
     The following python packages are needed:
     - scienceplots
     - matplotlib
+    And the xetex package for save pgf files
 """
 
 from energydiagram import ED
