@@ -216,8 +216,6 @@ class ED:
         ax.set_ylabel("Energy (MeV)", fontsize=14)
         for tick in ax.yaxis.get_major_ticks():
                 tick.label.set_fontsize(14)
-        for tick in ax.get_yticklabels():
-            tick.set_fontname("Tex Gyre Pagella")
         ax.axes.get_xaxis().set_visible(False)
         # ax.spines['top'].set_visible(False)
         # ax.spines['right'].set_visible(False)
