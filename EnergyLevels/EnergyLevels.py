@@ -85,6 +85,34 @@ for i in range(1,len(calc)):
     jj = int(line[1])
     Ca42.add_level(ene, top_text='', bottom_text='', left_text='${0:1d}^{1:s}$'.format(jj,pp), color='red', position='last')
 
+# Linking
+# # 0^+
+# A210.add_link(0,5,linewidth=0.75)
+# A210.add_link(5,10,linewidth=0.75)
+# A210.add_link(16,21,linewidth=0.75)
+# A210.add_link(21,26,linewidth=0.75)
+# # 2^+
+# A210.add_link(1,6,linewidth=0.75)
+# A210.add_link(6,11,linewidth=0.75)
+# A210.add_link(17,22,linewidth=0.75)
+# A210.add_link(22,27,linewidth=0.75)
+# # 4^+
+# A210.add_link(2,7,linewidth=0.75)
+# A210.add_link(7,12,linewidth=0.75)
+# A210.add_link(18,23,linewidth=0.75)
+# A210.add_link(23,28,linewidth=0.75)
+# # 6^+
+# A210.add_link(3,8,linewidth=0.75)
+# A210.add_link(8,13,linewidth=0.75)
+# A210.add_link(19,24,linewidth=0.75)
+# A210.add_link(24,29,linewidth=0.75)
+# # 8^+
+# A210.add_link(4,9,linewidth=0.75)
+# A210.add_link(9,14,linewidth=0.75)
+# A210.add_link(20,25,linewidth=0.75)
+# A210.add_link(25,30,linewidth=0.75)
+
+
 # Ca42.plot(show_IDs=True) # This is usefull if you want to link two columns
 Ca42.plot()
 plt.tight_layout()
