@@ -13,6 +13,7 @@
     And the xetex package for save pgf files
 """
 
+import os
 from energydiagram import ED
 from matplotlib import pyplot as plt
 
@@ -69,7 +70,7 @@ for k in range(1,cols+1):
     #
     for i in range(0,data_len):
         # Main information of the level
-        line = data[theline+5+i]
+        line = data[theline+7+i]
         ene = float(line.split()[0])
         jj = int(line.split()[1])
         parity = int(line.split()[2])

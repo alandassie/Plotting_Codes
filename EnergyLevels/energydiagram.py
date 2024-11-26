@@ -32,7 +32,7 @@ class ED:
         self.dimension = 'auto'
         self.space = 'auto'
         self.offset = 'auto'
-        self.offset_ratio = 0.02
+        self.offset_ratio = 0.008
         self.color_bottom_text = 'k'
         self.color_left_text = 'k'
         self.aspect = aspect
@@ -49,9 +49,16 @@ class ED:
         self.linestyle = []
         self.arrows = []
         self.electons_boxes = []
-        # matplotlib fiugre handlers
+        # matplotlib figure handlers
         self.fig = None
         self.ax = None
+        # Figure tweaks
+        self.fig_xsize = 6
+        self.fig_ysize = 6
+        self.fig_yaxis_major = 1
+        self.fig_yaxis_minor = 0.2
+        self.fig_yaxis_label = "Energy (MeV)"
+    
 
     def add_level(self, energy, bottom_text='', position=None, color='k',
                   top_text='Energy', right_text='', left_text='',linestyle='-'):
@@ -206,28 +213,30 @@ class ED:
         '''
         plt.style.use(['science','ieee'])
         # plt.rcParams.update({'figure.dpi': '100'})
-        fig = plt.figure(figsize=(4.5,4))
+        fig = plt.figure(figsize=(self.fig_xsize,self.fig_ysize))
         ax = fig.add_subplot(111)
+        colors = plt.get_cmap('tab10', 10)
         # Edit the major and minor ticks of the x and y axes
         ax.xaxis.set_tick_params(which='major', size=7, width=0.5, direction='in',top=True)
         ax.xaxis.set_tick_params(which='minor', size=3, width=0.5, direction='in',top=True)
         ax.yaxis.set_tick_params(which='major', size=7, width=0.5, direction='in',right=True)
         ax.yaxis.set_tick_params(which='minor', size=3, width=0.5, direction='in',right=True)
         # Edit the major and minor tick locations
-        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(1))
-        ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(0.25))
+        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_major))
+        ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_minor))
         #
-        ax.set_ylabel("Energy (MeV)", fontsize=14)
-        for tick in ax.yaxis.get_major_ticks():
-                tick.label.set_fontsize(14)
+        ax.set_ylabel(self.fig_yaxis_label, fontsize=16)
+        for tick in ax.get_yticklabels():
+            tick.set_fontsize(14)
         ax.axes.get_xaxis().set_visible(False)
         # ax.spines['top'].set_visible(False)
         # ax.spines['right'].set_visible(False)
         # ax.spines['bottom'].set_visible(False)
-        ax.set_ylim(-3,3.1)
-        # ax.set_ylim(-1,5)
 
         self.__auto_adjust()
+        # aux1 = (self.dimension+self.space)*0.95
+        # aux2 = (self.dimension*4+self.space)*1.05
+        # ax.set_xlim(aux1,aux2)
 
         data = zip(self.energies,  # 0
                    self.positions,  # 1
@@ -237,10 +246,18 @@ class ED:
                    self.left_texts,  # 5
                    self.right_texts,  # 6
                    self.linestyle)  # 7
-
+        
+        numberoflevels = len(self.energies)
+        
+        i = 1
         for level in data:
-            start = level[1]*(self.dimension+self.space) - 0.35
-            ax.hlines(level[0], start, start + self.dimension, color=level[4],linestyle=level[7], linewidth=1.5)
+            start = level[1]*(self.dimension+self.space)
+            if i == 1:
+                len_aux = start*0.06
+                ax.hlines(level[0], start*0.94, start, linewidth=0)
+            if i == numberoflevels:
+                ax.hlines(level[0], start + self.dimension, (start + self.dimension)+len_aux, linewidth=0)
+            ax.hlines(level[0], start, start + self.dimension, color=colors(level[4]),linestyle=level[7], linewidth=1.5)
             ax.text(start+self.dimension/2.,  # X
                     level[0]+self.offset,  # Y
                     level[3],  # self.top_texts
@@ -248,17 +265,17 @@ class ED:
                     fontsize=14,
                     verticalalignment='bottom')
 
-            ax.text(start + self.dimension,  # X
+            ax.text((start + self.dimension)*1.02,  # X
                     level[0],  # Y
-                    level[5],  # self.bottom_text
+                    level[5],  # self.left_text
                     horizontalalignment='left',
                     fontsize=14,
                     verticalalignment='center',
                     color=self.color_left_text)
 
-            ax.text(start,  # X
+            ax.text(start*0.96,  # X
                     level[0],  # Y
-                    level[6],  # self.bottom_text
+                    level[6],  # self.right_text
                     horizontalalignment='right',
                     fontsize=14,
                     verticalalignment='center',
@@ -271,6 +288,8 @@ class ED:
                     fontsize=14,
                     verticalalignment='top',
                     color=self.color_bottom_text)
+            i += 1
+        
         if show_IDs:
             # for showing the ID allowing the user to identify the level
             for ind, level in enumerate(data):
