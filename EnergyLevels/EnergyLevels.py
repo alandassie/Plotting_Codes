@@ -15,75 +15,105 @@
 
 from energydiagram import ED
 from matplotlib import pyplot as plt
-import numpy as np # To read energy levels from a file
 
+# Declaration of funcitons
+# Idea from https://stackoverflow.com/questions/3961265/get-line-number-of-certain-phrase-in-text-file
+def searchline(file,phrase):
+    with open(file, 'r', encoding='utf-8') as f:
+        text = f.read()
+        if phrase in text:
+            phrase_index = text.index(phrase)
+            l_num = text[:phrase_index].count('\n')  # Nth line has n-1 '\n's before
+        else:
+            l_num = None
+    return l_num
+def searchlinefinal(file,phrase):
+    with open(file, 'r', encoding='utf-8') as f:
+        text = f.read()
+        if phrase in text:
+            phrase_index = text.rindex(phrase)
+            l_num = text[:phrase_index].count('\n')  # Nth line has n-1 '\n's before
+        else:
+            l_num = None
+    return l_num
+# .-
+
+# INPUT FILE
+readfilename = os.getcwd() + '/data.in'
+with open(readfilename, 'r') as readfile:
+    data = readfile.read().split('\n')
+
+# READING INIT INFORMATION
+# Output file name
+theline = searchline(readfilename,"OUTPUT FILE") 
+name_out = data[theline+1]
+format_out = data[theline+2]
+outputfile = name_out + '.' + format_out
 # Experimental Energy of the core. This is used to plot positive energies
-exp0 = -19.843
+theline = searchline(readfilename,"EXP BINDING ENERGY") 
+exp0 = float(data[theline+1])
+# Number of data for plot
+theline = searchline(readfilename,"NUM DATA") 
+cols = int(data[theline+1])
 
-Ca42 = ED() # This is the Figure where we gonna add energy levels
+# Begin the plot
+figure = ED() # This is the Figure where we gonna add energy levels
 
-# First we add the experimental energies
-Ca42.add_level(0    ,top_text='', bottom_text='Experimental', left_text='$0^+$') 
-Ca42.add_level(1.837, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-Ca42.add_level(3.300, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-# Ca42.add_level(5.345, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-# Ca42.add_level(5.860, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-# Ca42.add_level(6.016, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-# Ca42.add_level(6.080, top_text='', bottom_text='', left_text='', position='last') # $0^+$
-# Ca42.add_level(6.720, top_text='', bottom_text='', left_text='$0^+_2$', position='last') # $0^+$
-Ca42.add_level(1.525, top_text='', bottom_text='', left_text='$2^+$', position='last')
-Ca42.add_level(2.424, top_text='', bottom_text='', right_text='', position='last') # $2^+$
-Ca42.add_level(3.392, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-Ca42.add_level(3.654, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-Ca42.add_level(4.449, top_text='', bottom_text='', right_text='$2^+$', position='last') # $2^+$
-Ca42.add_level(4.760, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-Ca42.add_level(4.866, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(5.358, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(5.530, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(5.716, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(5.875, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(6.274, top_text='', bottom_text='', left_text='', position='last') # $2^+$
-# Ca42.add_level(7.180, top_text='', bottom_text='', left_text='$2^+_3$', position='last') # $2^+$
-Ca42.add_level(2.752, top_text='', bottom_text='', left_text='$4^+$', position='last')
-Ca42.add_level(3.254, top_text='', bottom_text='', left_text='', position='last') # $4^+$
-Ca42.add_level(4.000, top_text='', bottom_text='', left_text='', position='last') # $4^+$
-Ca42.add_level(4.443, top_text='', bottom_text='', left_text='$4^+$', position='last') # $4^+$
-# Ca42.add_level(5.017, top_text='', bottom_text='', left_text='', position='last') # $4^+$
-# Ca42.add_level(6.113, top_text='', bottom_text='', left_text='', position='last') # $4^+$
-# Ca42.add_level(6.746, top_text='', bottom_text='', left_text='', position='last') # $4^+$
-# Ca42.add_level(6.895, top_text='', bottom_text='', right_text='$4^+_3$', position='last') # $4^+$
-Ca42.add_level(3.189, top_text='', bottom_text='', left_text='$6^+$', position='last') # $6^+_1$
-Ca42.add_level(3.447, top_text='', bottom_text='', right_text='', position='last') # $3^-$
-Ca42.add_level(4.690, top_text='', bottom_text='', left_text='', position='last') # $3^-$
-Ca42.add_level(4.100, top_text='', bottom_text='', left_text='', position='last') # $5^-$
-#
-# The upper lines can be rewritted in one read from file line:
-# exp = np.genfromtxt('42Ca.csv', dtype=None ) # Read the csv file
-# A210.add_level(exp['f0'][0], top_text='', bottom_text=r'Exp. $^{210}$Pb', left_text='$0^+$', color='black') # Add the Ground state level, check the correct J^Pi
-# for i in range(1,len(exp)):
-#     ene = exp['f0'][i]/1000
-#     if ene > 5: # Only plot energies under the 1.5 MeV of excitation. This can be modified
-#         continue
-#     if exp['f2'][i] != 1 or  exp['f3'][i] != 0: # Avoid plotting state with uncertainty, see the input file
-#         continue
-#     A210.add_level(ene, top_text='', bottom_text='', left_text='${0:s}$'.format(exp['f1'][i].decode('UTF-8')), color='black', position='last')
-
-# Plotting the Calculated energies, read them from a file
-calc = np.genfromtxt('NNEnergies.dat')
-Ca42.add_level(-exp0+calc[0,3], top_text='', bottom_text='Calculated', left_text='$0^+$', color='red')
-for i in range(1,len(calc)):
-    line = calc[i]
-    if line[3] > 0 :
-        continue
-    ene = -exp0+line[3]
-    if ene > 5: # Only plot energies under the 5 MeV of excitation. This can be modified
-        continue
-    if line[2] == 1:
-        pp = '+'
-    else:
-        pp = '-'
-    jj = int(line[1])
-    Ca42.add_level(ene, top_text='', bottom_text='', left_text='${0:1d}^{1:s}$'.format(jj,pp), color='red', position='last')
+# Plotting the data
+for k in range(1,cols+1):
+    theline = searchline(readfilename,"DATA-%s"% k) 
+    data_len = int(data[theline+1])
+    data_name = data[theline+2]
+    data_color = int(data[theline+3])
+    data_ls = data[theline+4]
+    #
+    for i in range(0,data_len):
+        # Main information of the level
+        line = data[theline+5+i]
+        ene = float(line.split()[0])
+        jj = int(line.split()[1])
+        parity = int(line.split()[2])
+        if parity == 0:
+            pp = '-'
+        elif parity == 1:
+            pp = '+'
+        index = int(line.split()[3])
+        jpi_pos = line.split()[4]
+        bttm = line.split()[5]
+        if bttm == 'None':
+            bttm = ''
+        top = line.split()[6]
+        if top == 'None':
+            top = ''
+        level_color = data_color
+        level_ls = data_ls
+        # Any aditional information
+        if len(line.split()) > 7:
+            level_color = int(line.split()[7])
+            level_ls = line.split()[8]
+        #
+        if i == 0:
+            if index >= 0:
+                if jpi_pos == 'left':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:1d}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls)
+                elif jpi_pos == 'right':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:1d}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls)
+            else:
+                if jpi_pos == 'left':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:1d}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls)
+                elif jpi_pos == 'right':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:1d}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls)
+        else:
+            if index >= 0:
+                if jpi_pos == 'left':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:1d}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls, position='last')
+                elif jpi_pos == 'right':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:1d}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls, position='last')
+            else:
+                if jpi_pos == 'left':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:1d}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls, position='last')
+                elif jpi_pos == 'right':
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:1d}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls, position='last')
 
 # Linking
 # # 0^+
@@ -114,11 +144,11 @@ for i in range(1,len(calc)):
 
 
 # Ca42.plot(show_IDs=True) # This is usefull if you want to link two columns
-Ca42.plot()
+figure.plot()
 plt.tight_layout()
 
 # To save Fig, coment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
-plt.savefig('TB_NN.pgf',format='pgf')
+plt.savefig(outputfile,format=format_out)
 
 # To Show Fig, uncoment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
 # plt.show()

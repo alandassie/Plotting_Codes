@@ -15,10 +15,14 @@ https://github.com/giacomomarchioro/PyEnergyDiagrams
 
 """
 import matplotlib as mpl
-import scienceplots # From https://github.com/garrettj403/SciencePlots
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from box_notation import plot_orbital_boxes
+try: # Import for nicer plots, only if you have it
+    import scienceplots # From https://github.com/garrettj403/SciencePlots
+    using_scienceplots = True
+except ImportError:
+    using_scienceplots = False
 
 
 class ED:
@@ -58,7 +62,7 @@ class ED:
         Parameters
         ----------
         energy : int
-                 The energy of the level in Kcal mol-1
+                 The energy of the level in MeV
          bottom_text  : str
                  The text on the bottom of the level (label of the level)
                  (default '')
