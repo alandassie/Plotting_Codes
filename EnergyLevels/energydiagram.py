@@ -45,6 +45,7 @@ class ED:
         self.bottom_texts = []
         self.left_texts = []
         self.right_texts = []
+        self.set_title = []
         self.links = []
         self.linestyle = []
         self.arrows = []
@@ -52,16 +53,28 @@ class ED:
         # matplotlib figure handlers
         self.fig = None
         self.ax = None
-        # Figure tweaks
+        # Figure parameters
+        self.fig_ratio = 0.06
+        self.fig_dpi = 600
         self.fig_xsize = 6
         self.fig_ysize = 6
         self.fig_yaxis_major = 1
         self.fig_yaxis_minor = 0.2
         self.fig_yaxis_label = "Energy (MeV)"
-    
+        
+    def fig_parameters(self, figratio, dpi, x_figsize, y_figsize, yminor, ymajor):
+        '''
+        Defing parameters for the output figure
+        '''
+        self.fig_ratio = figratio
+        self.fig_dpi = dpi
+        self.fig_xsize = x_figsize
+        self.fig_ysize = y_figsize
+        self.fig_yaxis_minor = yminor
+        self.fig_yaxis_major = ymajor
 
     def add_level(self, energy, bottom_text='', position=None, color='k',
-                  top_text='Energy', right_text='', left_text='',linestyle='-'):
+                  top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-'):
         '''
         Method of ED class
         This method add a new energy level to the plot.
@@ -107,6 +120,7 @@ class ED:
         self.bottom_texts.append(bottom_text)
         self.left_texts.append(left_text)
         self.right_texts.append(right_text)
+        self.set_title.append(set_title)
         self.links.append(link)
         self.linestyle.append(linestyle)
 
@@ -211,9 +225,19 @@ class ED:
         fig (plt.figure) and ax (fig.add_subplot())
 
         '''
-        plt.style.use(['science','ieee'])
-        # plt.rcParams.update({'figure.dpi': '100'})
-        fig = plt.figure(figsize=(self.fig_xsize,self.fig_ysize))
+        if using_scienceplots is not True:
+            plt.style.use(['science','ieee'])
+        else:
+            plt.rcParams.update({
+                "font.family": "serif",
+                "mathtext.fontset": "dejavuserif",
+                "text.usetex": True,
+                "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amssymb}"
+            })
+        #
+        plt.rcParams.update({'figure.dpi': '%s'% self.fig_dpi})
+        px = 1/plt.rcParams['figure.dpi']  # pixel in inches
+        fig = plt.figure(figsize=(self.fig_xsize*px,self.fig_ysize*px))
         ax = fig.add_subplot(111)
         colors = plt.get_cmap('tab10', 10)
         # Edit the major and minor ticks of the x and y axes
@@ -234,9 +258,6 @@ class ED:
         # ax.spines['bottom'].set_visible(False)
 
         self.__auto_adjust()
-        # aux1 = (self.dimension+self.space)*0.95
-        # aux2 = (self.dimension*4+self.space)*1.05
-        # ax.set_xlim(aux1,aux2)
 
         data = zip(self.energies,  # 0
                    self.positions,  # 1
@@ -245,19 +266,27 @@ class ED:
                    self.colors,  # 4
                    self.left_texts,  # 5
                    self.right_texts,  # 6
-                   self.linestyle)  # 7
+                   self.linestyle, # 7
+                   self.set_title)  # 8
         
         numberoflevels = len(self.energies)
+        minenergy = min(self.energies)
+        maxenergy = max(self.energies)
+        move = max(abs(maxenergy),abs(minenergy))*0.08
+        ax.set_ylim(minenergy-move,maxenergy+move)
         
         i = 1
         for level in data:
             start = level[1]*(self.dimension+self.space)
             if i == 1:
-                len_aux = start*0.06
-                ax.hlines(level[0], start*0.94, start, linewidth=0)
+                len_aux = start*self.fig_ratio
+                ax.hlines(level[0], start*(1-self.fig_ratio), start, linewidth=0)
             if i == numberoflevels:
                 ax.hlines(level[0], start + self.dimension, (start + self.dimension)+len_aux, linewidth=0)
-            ax.hlines(level[0], start, start + self.dimension, color=colors(level[4]),linestyle=level[7], linewidth=1.5)
+            if level[4] == -1:
+                ax.hlines(level[0], start, start + self.dimension, color='k',linestyle=level[7], linewidth=1.5)
+            else:
+                ax.hlines(level[0], start, start + self.dimension, color=colors(level[4]),linestyle=level[7], linewidth=1.5)
             ax.text(start+self.dimension/2.,  # X
                     level[0]+self.offset,  # Y
                     level[3],  # self.top_texts
@@ -265,7 +294,7 @@ class ED:
                     fontsize=14,
                     verticalalignment='bottom')
 
-            ax.text((start + self.dimension)*1.02,  # X
+            ax.text((start + self.dimension)*1.01,  # X
                     level[0],  # Y
                     level[5],  # self.left_text
                     horizontalalignment='left',
@@ -273,7 +302,7 @@ class ED:
                     verticalalignment='center',
                     color=self.color_left_text)
 
-            ax.text(start*0.96,  # X
+            ax.text(start*0.97,  # X
                     level[0],  # Y
                     level[6],  # self.right_text
                     horizontalalignment='right',
@@ -286,6 +315,14 @@ class ED:
                     level[2],  # self.bottom_text
                     horizontalalignment='center',
                     fontsize=14,
+                    verticalalignment='top',
+                    color=self.color_bottom_text)
+            
+            ax.text(start + self.dimension/2.,  # X
+                    minenergy - self.offset*6,  # Y
+                    level[8],  # self.bottom_text
+                    horizontalalignment='center',
+                    fontsize=16,
                     verticalalignment='top',
                     color=self.color_bottom_text)
             i += 1
