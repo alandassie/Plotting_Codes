@@ -54,7 +54,8 @@ class ED:
         self.fig = None
         self.ax = None
         # Figure parameters
-        self.fig_ratio = 0.06
+        self.fig_ratiox = 0.06
+        self.fig_ratioy = 0.08
         self.fig_dpi = 600
         self.fig_xsize = 6
         self.fig_ysize = 6
@@ -62,11 +63,12 @@ class ED:
         self.fig_yaxis_minor = 0.2
         self.fig_yaxis_label = "Energy (MeV)"
         
-    def fig_parameters(self, figratio, dpi, x_figsize, y_figsize, yminor, ymajor):
+    def fig_parameters(self, figratiox, figratioy, dpi, x_figsize, y_figsize, yminor, ymajor):
         '''
         Defing parameters for the output figure
         '''
-        self.fig_ratio = figratio
+        self.fig_ratiox = figratiox
+        self.fig_ratioy = figratioy
         self.fig_dpi = dpi
         self.fig_xsize = x_figsize
         self.fig_ysize = y_figsize
@@ -272,15 +274,15 @@ class ED:
         numberoflevels = len(self.energies)
         minenergy = min(self.energies)
         maxenergy = max(self.energies)
-        move = max(abs(maxenergy),abs(minenergy))*0.08
+        move = max(abs(maxenergy),abs(minenergy))*self.fig_ratioy
         ax.set_ylim(minenergy-move,maxenergy+move)
         
         i = 1
         for level in data:
             start = level[1]*(self.dimension+self.space)
             if i == 1:
-                len_aux = start*self.fig_ratio
-                ax.hlines(level[0], start*(1-self.fig_ratio), start, linewidth=0)
+                len_aux = start*self.fig_ratiox
+                ax.hlines(level[0], start*(1-self.fig_ratiox), start, linewidth=0)
             if i == numberoflevels:
                 ax.hlines(level[0], start + self.dimension, (start + self.dimension)+len_aux, linewidth=0)
             if level[4] == -1:
@@ -326,6 +328,16 @@ class ED:
                     verticalalignment='top',
                     color=self.color_bottom_text)
             i += 1
+            
+        data = zip(self.energies,  # 0
+                   self.positions,  # 1
+                   self.bottom_texts,  # 2
+                   self.top_texts,  # 3
+                   self.colors,  # 4
+                   self.left_texts,  # 5
+                   self.right_texts,  # 6
+                   self.linestyle, # 7
+                   self.set_title)  # 8        
         
         if show_IDs:
             # for showing the ID allowing the user to identify the level
@@ -361,10 +373,16 @@ class ED:
                 x2 = self.positions[i[0]]*(self.dimension+self.space)
                 y1 = self.energies[idx]
                 y2 = self.energies[i[0]]
-                line = Line2D([x1, x2], [y1, y2],
-                              ls=i[1],
-                              linewidth=i[2],
-                              color=i[3])
+                if i[3] == -1:
+                    line = Line2D([x1, x2], [y1, y2],
+                                ls=i[1],
+                                linewidth=i[2],
+                                color='k')
+                else:
+                    line = Line2D([x1, x2], [y1, y2],
+                                ls=i[1],
+                                linewidth=i[2],
+                                color=colors(i[3]))
                 ax.add_line(line)
 
         for box in self.electons_boxes:
