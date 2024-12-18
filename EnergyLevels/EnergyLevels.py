@@ -88,7 +88,8 @@ for k in range(1,cols+1):
         # Main information of the level
         line = data[theline+7+i]
         state_index = int(line.split()[0])
-        ene = float(line.split()[1])
+        state_ene = float(line.split()[1])
+        ene = state_ene - exp0
         jj = line.split()[2]
         parity = int(line.split()[3])
         if parity == 0:
