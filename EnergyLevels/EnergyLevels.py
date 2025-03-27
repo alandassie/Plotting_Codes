@@ -169,7 +169,7 @@ for link in link_data:
 
 # figure.plot(show_IDs=True) # This is usefull if you want to link two columns
 figure.plot()
-# plt.tight_layout()
+plt.tight_layout()
 
 # To save Fig, coment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
 plt.savefig(outputfile,format=format_out)
