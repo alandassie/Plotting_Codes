@@ -135,7 +135,7 @@ for k in range(1,cols+1):
         if i == 0:   
             if index >= 0:
                 if jpi_pos == 'left':
-                    figure.add_level(ene, top_text=top, bottom_text=data, left_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), set_title=data_name, color=level_color, linestyle=level_ls)
+                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), set_title=data_name, color=level_color, linestyle=level_ls)
                 elif jpi_pos == 'right':
                     figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), set_title=data_name, color=level_color, linestyle=level_ls)
                 else:
@@ -169,7 +169,7 @@ for link in link_data:
 
 # figure.plot(show_IDs=True) # This is usefull if you want to link two columns
 figure.plot()
-plt.tight_layout()
+# plt.tight_layout()
 
 # To save Fig, coment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
 plt.savefig(outputfile,format=format_out)
