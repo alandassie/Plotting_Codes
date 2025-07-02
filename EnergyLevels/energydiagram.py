@@ -227,7 +227,7 @@ class ED:
         fig (plt.figure) and ax (fig.add_subplot())
 
         '''
-        if using_scienceplots is not True:
+        if using_scienceplots is True:
             plt.style.use(['science','ieee'])
         else:
             plt.rcParams.update({
