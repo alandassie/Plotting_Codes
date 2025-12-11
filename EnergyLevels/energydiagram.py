@@ -18,6 +18,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from box_notation import plot_orbital_boxes
+from width_notation import plot_width_boxes
 try: # Import for nicer plots, only if you have it
     import scienceplots # From https://github.com/garrettj403/SciencePlots
     using_scienceplots = True
@@ -39,6 +40,7 @@ class ED:
         # data
         self.pos_number = 0
         self.energies = []
+        self.widths = []
         self.positions = []
         self.colors = []
         self.top_texts = []
@@ -50,6 +52,7 @@ class ED:
         self.linestyle = []
         self.arrows = []
         self.electons_boxes = []
+        self.widths_boxes = []
         # matplotlib figure handlers
         self.fig = None
         self.ax = None
@@ -83,7 +86,7 @@ class ED:
 
         Parameters
         ----------
-        energy : int
+        energy : float
                  The energy of the level in MeV
          bottom_text  : str
                  The text on the bottom of the level (label of the level)
@@ -175,6 +178,18 @@ class ED:
 
         '''
         self.links[start_level_id].append((end_level_id, ls, linewidth, color))
+
+    def add_widthbox(self,
+                     level_id,
+                     width,
+                     width_spacing_f):
+        self.__auto_adjust()
+        x = self.positions[level_id]*(self.dimension+self.space)+self.dimension*0.5
+        y = self.energies[level_id]
+        side = self.dimension
+        high = width
+        color = self.colors[level_id]
+        self.widths_boxes.append((x, y, high, color, side, width_spacing_f))
 
     def add_electronbox(self,
                         level_id,
@@ -269,7 +284,7 @@ class ED:
                    self.left_texts,  # 5
                    self.right_texts,  # 6
                    self.linestyle, # 7
-                   self.set_title)  # 8
+                   self.set_title) # 8
         
         numberoflevels = len(self.energies)
         minenergy = min(self.energies)
@@ -337,7 +352,8 @@ class ED:
                    self.left_texts,  # 5
                    self.right_texts,  # 6
                    self.linestyle, # 7
-                   self.set_title)  # 8        
+                   self.set_title,  # 8     
+                   self.widths)  # 9   
         
         if show_IDs:
             # for showing the ID allowing the user to identify the level
@@ -390,6 +406,16 @@ class ED:
             # x,y,boxes,electrons,side,spacing_f
             x, y, boxes, electrons, side, spacing_f = box
             plot_orbital_boxes(ax, x, y, boxes, electrons, side, spacing_f)
+
+        for box in self.widths_boxes:
+            # here we add the boxes for each width
+            # x,y,high,side,spacing_f
+            x, y, high, color_id, side, spacing_f = box
+            if color_id == -1:
+                color = 'k'
+            else:
+                color = colors(color_id)
+            plot_width_boxes(ax, x, y, high, color, side, spacing_f)
 
         # Return fig and ax
         self.ax = ax
