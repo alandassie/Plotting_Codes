@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from box_notation import plot_orbital_boxes
 from width_notation import plot_width_boxes
+from errorbar_notation import plot_errorbar
 try: # Import for nicer plots, only if you have it
     import scienceplots # From https://github.com/garrettj403/SciencePlots
     using_scienceplots = True
@@ -53,6 +54,7 @@ class ED:
         self.arrows = []
         self.electons_boxes = []
         self.widths_boxes = []
+        self.errorbars = []
         # matplotlib figure handlers
         self.fig = None
         self.ax = None
@@ -179,17 +181,29 @@ class ED:
         '''
         self.links[start_level_id].append((end_level_id, ls, linewidth, color))
 
+    def add_errorbar(self,
+                     level_id,
+                     uncertainty):
+        self.__auto_adjust()
+        x = self.positions[level_id]*(self.dimension+self.space)+self.dimension*0.5
+        y = self.energies[level_id]
+        side = self.dimension
+        high = uncertainty
+        color = self.colors[level_id]
+        self.errorbars.append((x, y, high, color, side))
+
     def add_widthbox(self,
                      level_id,
                      width,
-                     width_spacing_f):
+                     width_spacing_f,
+                     width_alpha):
         self.__auto_adjust()
         x = self.positions[level_id]*(self.dimension+self.space)+self.dimension*0.5
         y = self.energies[level_id]
         side = self.dimension
         high = width
         color = self.colors[level_id]
-        self.widths_boxes.append((x, y, high, color, side, width_spacing_f))
+        self.widths_boxes.append((x, y, high, color, side, width_spacing_f, width_alpha))
 
     def add_electronbox(self,
                         level_id,
@@ -409,13 +423,23 @@ class ED:
 
         for box in self.widths_boxes:
             # here we add the boxes for each width
-            # x,y,high,side,spacing_f
-            x, y, high, color_id, side, spacing_f = box
+            # x,y,high,side,spacing_f,alpha
+            x, y, high, color_id, side, spacing_f, alpha = box
             if color_id == -1:
                 color = 'k'
             else:
                 color = colors(color_id)
-            plot_width_boxes(ax, x, y, high, color, side, spacing_f)
+            plot_width_boxes(ax, x, y, high, color, side, spacing_f, alpha)
+
+        for errorbar in self.errorbars:
+            # here we add the errorbars
+            # x,y,high,color,side
+            x, y, high, color_id, side = errorbar
+            if color_id == -1:
+                color = 'k'
+            else:
+                color = colors(color_id)
+            plot_errorbar(ax, x, y, high, color, side)
 
         # Return fig and ax
         self.ax = ax

@@ -10,7 +10,7 @@ import matplotlib.patches as patches
 from matplotlib.path import Path
 
 
-def plot_width_boxes (ax,x,y,state_width, color, box_side, width_spacing_f ):
+def plot_width_boxes (ax,x,y,state_width, color, box_side, width_spacing_f, width_alpha ):
     Xi = x - box_side*0.5 + box_side*width_spacing_f
     Yi = y - state_width
 
@@ -21,7 +21,7 @@ def plot_width_boxes (ax,x,y,state_width, color, box_side, width_spacing_f ):
     state_width*2,
     fill=True,
     fc = color,
-    alpha = 0.4,
+    alpha = width_alpha,
     ec = None,
     zorder=10)
     ax.add_patch(square)
