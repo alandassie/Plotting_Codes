@@ -19,6 +19,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import scienceplots # From https://github.com/garrettj403/SciencePlots
 from scipy.interpolate import CubicSpline as CS
 
@@ -29,7 +30,7 @@ from scipy.interpolate import CubicSpline as CS
 save_fig = False # True if you want to save the figure, False if you want to show it
 name_figure = "CC_elastic-p"
 format_out = "pdf"
-outputfile = name_out + '.' + format_out
+outputfile = name_figure + '.' + format_out
 # Fig formats
 dpi = 200 # Dots per inch
 x_figsize = 600 # X Size of each subplot in pixel, but it will be converted to inches later
@@ -75,6 +76,8 @@ divide_exp_by_ruth = False # True if the experimental data is given as cross-sec
 
 ##########################################################################################
 # Declaration of funcitons
+fm2_to_mb = 10.0
+e2 = 1.44
 # Idea from https://stackoverflow.com/questions/3961265/get-line-number-of-certain-phrase-in-text-file
 def searchline(file,phrase):
     with open(file, 'r', encoding='utf-8') as f:
