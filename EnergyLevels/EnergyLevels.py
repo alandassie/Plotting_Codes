@@ -1,297 +1,120 @@
-"""
-    This is the main file example to use with the
-    code energydiagram by Giacomo Marchioro.
+#!/usr/bin/env python3
+"""Plot validated nuclear energy levels. Run with --help for diagnostic shortcuts."""
+import argparse
+from pathlib import Path
+import shutil
+import sys
+from input_format import InputError, read_input, write_input
 
-    In the file energydiagram.py you can change
-    the ticks spacing, the size of the figure,
-    the colors, the axes limits, etc.
-    This is founded in the function plot.
+def render(config, args):
+    try:
+        import matplotlib
+        if not args.show:
+            matplotlib.use('Agg')
+        from matplotlib import pyplot as plt
+        from energydiagram import ED
+    except ImportError as exc:
+        raise InputError(f'Missing plotting dependency: {exc}. Install matplotlib with python3 -m pip install matplotlib') from exc
+    f = config.figure.copy()
+    if args.format:
+        f['format'] = args.format
+    tex = args.tex == 'yes'
+    if tex or f['format'] == 'pgf':
+        executable = 'xelatex' if f['format'] == 'pgf' else 'latex'
+        if not shutil.which(executable):
+            raise InputError(f'{executable} was not found. Install a TeX distribution, or use --format pdf --tex no.')
+    plt.rcParams.update({'pgf.texsystem': 'xelatex', 'pgf.rcfonts': False})
+    figure = ED()
+    figure.use_tex = tex
+    figure.font_size = f['font_size']
+    figure.title_size = f['title_size']
+    figure.fig_yaxis_label = f['ylabel']
+    figure.fig_parameters(f['x_margin'], f['y_margin'], f['dpi'], *f['size_px'], *f['ticks'])
+    states = [s for ds in config.datasets for s in ds.levels]
+    mapping = {s.id: i for i, s in enumerate(states)}
+    for ds in config.datasets:
+        for i, s in enumerate(ds.levels):
+            label = f'${s.j}^{{{"+" if s.parity else "-"}}}'
+            if s.label_index >= 0:
+                label += f'_{{{s.label_index}}}'
+            label += '$'
+            # Original ED calls text on the physical left right_text, and vice versa.
+            kwargs = {('right_text' if s.jpi == 'left' else 'left_text'): label} if s.jpi != 'None' else {}
+            figure.add_level(s.energy-f['reference_energy'], bottom_text=s.bottom,
+                             top_text=s.top, position=None if i == 0 else 'last',
+                             set_title=ds.name if i == 0 else '',
+                             color=s.options.get('color', ds.color),
+                             linestyle=s.options.get('linestyle', ds.linestyle),
+                             label_dy=s.options.get('label_dy', 0), **kwargs)
+    for s in states:
+        index = mapping[s.id]
+        if s.width > 0:
+            figure.add_widthbox(index, s.width, f['width_spacing'], f['width_alpha'])
+        if s.uncertainty > 0:
+            figure.add_errorbar(index, s.uncertainty)
+        if 'link' in s.options:
+            dest = mapping[s.options['link']]
+            start, end = sorted((dest, index), key=lambda k: figure.positions[k])
+            figure.add_link(start, end, color=s.options.get('link_color', -1),
+                            ls=s.options.get('link_style', '--'),
+                            linewidth=s.options.get('link_width', .75))
+    output = Path(args.output) if args.output else Path(f['output'] + '.' + f['format'])
+    if output.resolve() == Path(args.input).resolve():
+        raise InputError('Output path is the input file; choose another path with -o.')
+    if output.exists() and not args.force:
+        raise InputError(f'Output already exists: {output}. Use --force to replace it or -o to choose another path.')
+    if not output.parent.is_dir():
+        raise InputError(f'Output directory does not exist: {output.parent}. Create it or choose another -o path.')
+    try:
+        figure.plot()
+        if args.show_ids:
+            for i, s in enumerate(states):
+                x = figure.positions[i]*(figure.dimension+figure.space)
+                figure.ax.text(x, figure.energies[i]+figure.offset*2, str(s.id), color='red', fontsize=9)
+        figure.fig.tight_layout()
+        figure.fig.savefig(output, format=f['format'], dpi=f['dpi'])
+        if args.show:
+            plt.show()
+    except Exception as exc:
+        raise InputError(f'Rendering/export failed for {output}: {exc}\n'
+                         'Check LaTeX/math labels; try --format pdf --tex no. Use --debug for the traceback.') from exc
+    finally:
+        plt.close('all')
+    return output
 
-    The following python packages are needed:
-    - scienceplots
-    - matplotlib
-    And the xetex package for save pgf files
-"""
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('input', nargs='?', default='data.in', help='input path (default: data.in)')
+    p.add_argument('-c', '--check', action='store_true', help='validate without importing Matplotlib or creating a figure')
+    p.add_argument('--convert', metavar='FILE', help='write readable input without plotting')
+    p.add_argument('-o', '--output', help='exact output path; format is controlled separately')
+    p.add_argument('-f', '--format', choices=['pdf','png','jpg','jpeg','svg','eps','ps','pgf'], help='override input format')
+    p.add_argument('--tex', choices=['yes','no'], default='no', help='external LaTeX labels (default: no; PGF always needs xelatex)')
+    p.add_argument('--show-ids', action='store_true', help='print input state IDs in red')
+    p.add_argument('--show', action='store_true', help='show an interactive window after saving')
+    p.add_argument('--debug', action='store_true', help='include a traceback on error')
+    p.add_argument('--force', action='store_true', help='replace an existing output or converted input')
+    args = p.parse_args(argv)
+    try:
+        config = read_input(args.input)
+        print(f'Input OK: {len(config.datasets)} datasets, {sum(len(d.levels) for d in config.datasets)} states'
+              f' ({"legacy" if config.legacy else "readable"} format).')
+        if args.convert:
+            if Path(args.convert).resolve() == Path(args.input).resolve():
+                raise InputError('Conversion must use a different path from the source input.')
+            if Path(args.convert).exists() and not args.force:
+                raise InputError(f'{args.convert} already exists; use --force to replace it.')
+            write_input(config, args.convert)
+            print(f'Converted input: {args.convert}')
+        elif not args.check:
+            print(f'Saved: {render(config, args)}')
+        return 0
+    except (InputError, OSError, UnicodeError) as exc:
+        print(f'ERROR: {exc}', file=sys.stderr)
+        if args.debug:
+            import traceback
+            traceback.print_exc()
+        return 2
 
-import os
-from energydiagram import ED
-from matplotlib import pyplot as plt
-
-# Declaration of funcitons
-# Idea from https://stackoverflow.com/questions/3961265/get-line-number-of-certain-phrase-in-text-file
-def searchline(file,phrase):
-    with open(file, 'r', encoding='utf-8') as f:
-        text = f.read()
-        if phrase in text:
-            phrase_index = text.index(phrase)
-            l_num = text[:phrase_index].count('\n')  # Nth line has n-1 '\n's before
-        else:
-            l_num = None
-    return l_num
-def searchlinefinal(file,phrase):
-    with open(file, 'r', encoding='utf-8') as f:
-        text = f.read()
-        if phrase in text:
-            phrase_index = text.rindex(phrase)
-            l_num = text[:phrase_index].count('\n')  # Nth line has n-1 '\n's before
-        else:
-            l_num = None
-    return l_num
-# .-
-
-# INPUT FILE
-readfilename = os.getcwd() + '/data.in'
-with open(readfilename, 'r') as readfile:
-    data = readfile.read().split('\n')
-
-# READING INIT INFORMATION
-# Output file
-theline = searchline(readfilename,"OUTPUT FILE") 
-name_out = data[theline+1]
-format_out = data[theline+2]
-outputfile = name_out + '.' + format_out
-# Fig formats
-dpi = float(data[theline+3])
-aux_figsize = data[theline+4].split(',')
-x_figsize = float(aux_figsize[0])
-y_figsize = float(aux_figsize[1])
-yminor = float(data[theline+5].split(',')[0]) # Minor Tick spacing
-ymajor = float(data[theline+5].split(',')[1]) # Major Tick spacing
-figratiox = float(data[theline+6]) # Distance between plot and y_axes
-figratioy = float(data[theline+7]) # Distance between plot and x_axes
-width_alpha = float(data[theline+8]) # Transparency of the width box
-width_spacing_f = float(data[theline+9]) # Spacing factor for width boxes
-# Experimental Energy of the core. This is used to plot positive energies
-theline = searchline(readfilename,"EXP BINDING ENERGY") 
-exp0 = float(data[theline+1])
-# Number of data for plot
-theline = searchline(readfilename,"NUM DATA") 
-cols = int(data[theline+1])
-#.-
-# Prepare possible width boxes
-width_boxes_data = []
-# Prepare possible errorbars
-errorbars_data = []
-# Prepare possible link array
-link_data = []
-
-# Begin the plot
-figure = ED() # This is the Figure where we gonna add energy levels
-# Config the figure
-figure.fig_parameters(figratiox,figratioy,dpi,x_figsize,y_figsize, yminor, ymajor)
-
-# Plotting the data
-for k in range(1,cols+1):
-    theline = searchline(readfilename,"DATA-%s"% k) 
-    data_len = int(data[theline+1])
-    data_name = data[theline+2]
-    if data_name == 'None':
-        data_name = None
-    data_color = int(data[theline+3])
-    data_ls = data[theline+4]
-    #
-    for i in range(0,data_len):
-        # Main information of the level
-        line = data[theline+7+i]
-        state_index = int(line.split()[0])
-        state_ene = float(line.split()[1])
-        ene = state_ene - exp0
-        state_width = float(line.split()[2])
-        if state_width > 0:
-            width_boxes_data.append( [state_index, state_width] )
-        state_uncertainty = float(line.split()[3])
-        if state_uncertainty > 0:
-            errorbars_data.append( [state_index, state_uncertainty] )
-        jj = line.split()[4]
-        parity = int(line.split()[5])
-        if parity == 0:
-            pp = '-'
-        elif parity == 1:
-            pp = '+'
-        index = int(line.split()[6])
-        jpi_pos = line.split()[7]
-        bttm = line.split()[8]
-        if bttm == 'None':
-            bttm = ''
-        top = line.split()[9]
-        if top == 'None':
-            top = ''
-        level_color = data_color
-        level_ls = data_ls
-        # Any aditional information
-        if len(line.split()) > 10:
-            link_set = 0
-            link_color = -1
-            link_style = '--'
-            link_width = 0.75
-            n_add = len( line.split()[10::] )
-            for j in range(0,n_add):
-                if line.split()[10+j].split('#')[0] == 'C': # Specific color line
-                    level_color = int(line.split()[10+j].split('#')[1])
-                if line.split()[10+j].split('#')[0] == 'LS': # Specific line style
-                    level_ls = line.split()[10+j].split('#')[1]
-                # Possible linking information
-                if line.split()[10+j].split('#')[0] == 'L': # Set link destination
-                    link_out = int(line.split()[10+j].split('#')[1])
-                    link_set = 1
-                if line.split()[10+j].split('#')[0] == 'LC': # Set link color
-                    link_color = int(line.split()[10+j].split('#')[1])
-                if line.split()[10+j].split('#')[0] == 'LLS': # Set link style
-                    link_style = line.split()[10+j].split('#')[1]
-                if line.split()[10+j].split('#')[0] == 'LLW': # Set link width
-                    link_width = float(line.split()[10+j].split('#')[1])
-                if link_set == 1 and j+1 == n_add :
-                    # Save link information
-                    link_data.append( [state_index, link_out, link_color, link_style, link_width] )
-        #
-        if i == 0:   
-            if index >= 0:
-                if jpi_pos == 'left':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), set_title=data_name, color=level_color, linestyle=level_ls)
-                elif jpi_pos == 'right':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), set_title=data_name, color=level_color, linestyle=level_ls)
-                else:
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, set_title=data_name, color=level_color, linestyle=level_ls)
-            else:
-                if jpi_pos == 'left':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:s}^{1:s}$'.format(jj,pp), set_title=data_name, color=level_color, linestyle=level_ls)
-                elif jpi_pos == 'right':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:s}^{1:s}$'.format(jj,pp), set_title=data_name, color=level_color, linestyle=level_ls)
-                else:
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, set_title=data_name, color=level_color, linestyle=level_ls)
-        else:
-            if index >= 0:
-                if jpi_pos == 'left':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls, position='last')
-                elif jpi_pos == 'right':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:s}^{1:s}_{2:1d}$'.format(jj,pp,index), color=level_color, linestyle=level_ls, position='last')
-                else:
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, color=level_color, linestyle=level_ls, position='last')
-            else:
-                if jpi_pos == 'left':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, left_text='${0:s}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls, position='last')
-                elif jpi_pos == 'right':
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, right_text='${0:s}^{1:s}$'.format(jj,pp), color=level_color, linestyle=level_ls, position='last')
-                else:
-                    figure.add_level(ene, top_text=top, bottom_text=bttm, color=level_color, linestyle=level_ls, position='last')
-
-# Width boxes
-for box in width_boxes_data:
-    level_id = box[0]
-    width = box[1]
-    figure.add_widthbox(level_id, width, width_spacing_f, width_alpha)
-# Errorbars
-for err in errorbars_data:
-    level_id = err[0]
-    uncertainty = err[1]
-    figure.add_errorbar(level_id, uncertainty)
-# Linking
-for link in link_data:
-    figure.add_link(link[1],link[0],color=link[2],ls=link[3],linewidth=link[4])
-
-# figure.plot(show_IDs=True) # This is usefull if you want to link two columns
-figure.plot()
-plt.tight_layout()
-
-# To save Fig, coment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
-plt.savefig(outputfile,format=format_out)
-
-# To Show Fig, uncoment the line "plt.rcParams.update({'figure.dpi': '100'})" in file "energydiagram.py" 
-# plt.show()
-
-
-"""
-    Example of data.in file:
-_________________________________
-OUTPUT FILE # 1 - Name of the figure, 2- Format: png, jpg, eps, pdj, pgf (xenex package needed), 3- Fig dpi resolution, 4- 'x,y' Figsize in pixel, 5- (m,M) minor and major tick.space, 6- Control the distance between plot and y_axes (0 to 1), 7- Control the distance between plot and x_axes (0 to 1), 8- Control the transparency of the width box, 9- Control the distance of the width-box with the state line end
-CC_11C_Spectrum
-pdf
-200
-1200,1200
-0.2,2
-0.2
-0.04
-0.4
-0.15
-
-EXP BINDING ENERGY # Experimental binding energy. This is used to plot positive energies. If =0, will plot directly the input energy
--45.145
-
-NUM DATA # Number of data in the figure. For ex., 2, experiment and calculated data
-4
-
-DATA-1 # First four lines define 1-number of states, 2-name of the data ('None' for no name), 3-color of the line (number between 0 and 9, see TAB10 python, or -1 for black), 4-line style ('--','-',':','-.')
-13
-Exp $J^-$
--1
--
-# Data must have the following columns:
-# INDEX ENERGY WIDTH ERROR J  PI(0 for '-' and 1 for '+')  INDEX('-1' if not plotting index) JPIPOS('left' or 'right' or 'None') BOTTOMTEXT('None' for nothing) TOPTEXT('None' for nothing) COLOR(optional) LS(optional) LINKINDEX(optional) LINKCOLOR(optional) LINKLS(optional) LINKLW(optional)
-  0 -45.145 -1 -1   3/2  0  -1  right  None  None
-  1 -43.145 -1 -1   1/2  0  -1  right  None  None
-  2 -40.827 -1 -1   5/2  0  -1  right  None  None
-  3 -40.341 -1 -1   3/2  0  -1  right  None  None
-  4 -38.667 -1 -1   7/2  0  -1  right  None  None
-  6 -36.725 -1 -1   5/2  0  -1  right  None  None
-  7 -35.500 -1 -1   3/2  0  -1  right  None  None
-  8 -35.365 -1 -1   5/2  0  -1  right  None  None
-  9 -35.175 -1 -1   7/2  0  -1  right  None  None
- 11 -36.456 -1 -1   -1   0  -1  None   None  None   C#1 LS#--
- 12 -35.923 -1 -1   -1   0  -1  None   None  None   C#1 LS#--
-
-DATA-2 # First four lines define 1-number of states, 2-name of the data ('None' for no name), 3-color of the line (number between 0 and 9, see TAB10 python, or -1 for black), 4-line style ('--','-',':','-.')
-13
-CC $J^-$
-0
--
-# Data must have the following columns:
-# INDEX ENERGY WIDTH ERROR J  PI(0 for '-' and 1 for '+')  INDEX('-1' if not plotting index) JPIPOS('left' or 'right' or 'None') BOTTOMTEXT('None' for nothing) TOPTEXT('None' for nothing) COLOR(optional) LS(optional) LINKINDEX(optional) LINKCOLOR(optional) LINKLS(optional) LINKLW(optional)
- 13 -43.478 -1 -1   3/2  0  -1  None  None  None              L#0 LC#-1 LLS#--
- 14 -42.382 -1 -1   1/2  0  -1  None  None  None              L#1 LC#-1 LLS#--
- 15 -34.131 -1 -1   1/2  0  -1  left  None  None 
- 16 -39.528 -1 -1   5/2  0  -1  None  None  None              L#2 LC#-1 LLS#--
- 17 -37.934 -1 -1   3/2  0  -1  None  None   None              L#3 LC#-1 LLS#--
- 19 -35.222 -1 -1   3/2  0  -1  None  None  None              L#5 LC#-1 LLS#--
- 20 -35.157 -1 -1   5/2  0  -1  None  None  None              L#6 LC#-1 LLS#--
- 21 -32.186 -1 -1   3/2  0  -1  None  None  None              L#7 LC#-1 LLS#--
- 22 -32.255 -1 -1   5/2  0  -1  None  None  None              L#8 LC#-1 LLS#--
- 24 -36.456 -1 -1   -1   0  -1  None  None  None   C#1 LS#--  L#11 LC#1 LLS#-- LLW#1.5
- 25 -35.923 -1 -1   -1   0  -1  None  None  None   C#1 LS#--  L#12 LC#1 LLS#-- LLW#1.5
-
-DATA-3 # First four lines define 1-number of states, 2-name of the data ('None' for no name), 3-color of the line (number between 0 and 9, see TAB10 python, or -1 for black), 4-line style ('--','-',':','-.')
-11
-Exp $J^+$
--1
--
-# Data must have the following columns:
-# INDEX ENERGY WIDTH ERROR J  PI(0 for '-' and 1 for '+')  INDEX('-1' if not plotting index) JPIPOS('left' or 'right' or 'None') BOTTOMTEXT('None' for nothing) TOPTEXT('None' for nothing) COLOR(optional) LS(optional) LINKINDEX(optional) LINKCOLOR(optional) LINKLS(optional) LINKLW(optional)
- 26 -38.806 -1 -1   1/2  1  -1  right  None  None
- 27 -38.241 -1 -1   5/2  1  -1  right  None  None
- 28 -37.745 -1 -1   3/2  1  -1  right  None  None
- 29 -37.646 -1 -1   3/2  1  -1  right  None   None
- 31 -36.446 -1 -1   5/2  1  -1  right  None  None
- 32 -35.945 -1 -1   5/2  1  -1  right  None  None
- 33 -35.062 -1 -1   7/2  1  -1  right  None  None
- 36 -35.923 -1 -1   -1   0  -1  None   None  None   C#1 LS#--  L#25 LC#1 LLS#-- LLW#1.5
-
-DATA-4 # First four lines define 1-number of states, 2-name of the data ('None' for no name), 3-color of the line (number between 0 and 9, see TAB10 python, or -1 for black), 4-line style ('--','-',':','-.')
-13
-CC $J^+$
-0
--
-# Data must have the following columns:
-# INDEX ENERGY WIDTH ERROR J  PI(0 for '-' and 1 for '+')  INDEX('-1' if not plotting index) JPIPOS('left' or 'right' or 'None') BOTTOMTEXT('None' for nothing) TOPTEXT('None' for nothing) COLOR(optional) LS(optional) LINKINDEX(optional) LINKCOLOR(optional) LINKLS(optional) LINKLW(optional)
- 37 -39.730 -1 -1   3/2  1  -1  None   None  None                                   L#28 LC#-1 LLS#--
- 38 -39.383 -1 -1   3/2  1  -1  None   None  None                                   L#29 LC#-1 LLS#--
- 39 -39.805 -1 -1   1/2  1  -1  None   None  None                                   L#26 LC#-1 LLS#--
- 40 -39.307 -1 -1   1/2  1  -1  left   None  None
- 41 -36.556 -1 -1   1/2  1  -1 left   None   
- 42 -39.808 -1 -1   5/2  1  -1  None   None  None                                   L#27 LC#-1 LLS#--
- 43 -35.098 -1 -1   5/2  1  -1  None   None  None                                   L#31 LC#-1 LLS#--
- 44 -34.368 -1 -1   5/2  1  -1  None   None  None                                   L#32 LC#-1 LLS#--
- 45 -35.009 -1 -1   7/2  1  -1  None   None  None                                   L#30 LC#-1 LLS#--
- 46 -33.069 -1 -1   7/2  1  -1  None   None  None                                   L#33 LC#-1 LLS#--
- 48 -36.456 -1 -1   -1   0  -1  None   None  $p-th$               C#1 LS#--  L#35 LC#1 LLS#-- LLW#1.5
- 49 -35.923 -1 -1   -1   0  -1  None   None  $^{3}\mathrm{He}-th$ C#1 LS#--  L#36 LC#1 LLS#-- LLW#1.5
-_________________________________
-"""
+if __name__ == '__main__':
+    sys.exit(main())

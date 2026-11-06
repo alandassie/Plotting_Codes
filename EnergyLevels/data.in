@@ -1,0 +1,70 @@
+# Energies, widths and uncertainties: MeV. Full-line # comments only.
+# Quote level labels containing spaces. Scalar settings need no quotes.
+[figure]
+# Output stem (no extension); paths are relative to the working directory.
+output = GSM_39Ca_40CaLambda
+# PDF is convenient; PGF requires xelatex. Override with --format.
+format = pdf
+# Pixels per inch. Physical size = size_px / dpi.
+dpi = 350.0
+# Nominal width,height in pixels.
+size_px = 1200.0, 900.0
+# Minor,major spacing on the energy axis (MeV).
+ticks = 0.02, 0.2
+# Extra horizontal padding; range 0 to 1.
+x_margin = 0.8
+# Vertical padding factor; range 0 to 1.
+y_margin = 0.12
+# Width-box opacity; 0 transparent, 1 opaque.
+width_alpha = 0.4
+# Inset on each side of a width box; 0 <= value < 0.5.
+width_spacing = 0.1
+# Displayed energy = input energy - reference_energy.
+reference_energy = 0.0
+# Energy-axis label.
+ylabel = Energy (MeV)
+# Level labels and tick labels, in points.
+font_size = 10.0
+# Dataset titles and axis label, in points.
+title_size = 11.0
+
+[dataset 1]
+name = Exp-$^{39}$Ca-
+color = -1
+linestyle = -
+
+[levels 1]
+# id energy width uncertainty j parity label_index jpi bottom top [options]
+0  0.0  -1.0  -1.0  3/2  1  -1  left  None  None
+1  0.467  -1.0  -1.0  1/2  1  -1  left  None  None
+2  0.796  -1.0  -1.0  7/2  0  -1  left  None  None
+3  1.025  -1.0  -1.0  3/2  0  -1  left  None  None
+
+[dataset 2]
+name = GSM
+color = 0
+linestyle = -
+
+[levels 2]
+# id energy width uncertainty j parity label_index jpi bottom top [options]
+4  0.0  -1.0  -1.0  3/2  1  -1  None  None  None  link=0  link_color=-1  link_style=--
+5  0.483  -1.0  -1.0  1/2  1  -1  None  None  None  color=1  link=1  link_color=-1  link_style=--
+6  0.701  -1.0  -1.0  7/2  0  -1  None  None  None  color=2  link=2  link_color=-1  link_style=--
+7  1.03  -1.0  -1.0  3/2  0  -1  None  None  None  color=3  link=3  link_color=-1  link_style=--
+
+[dataset 3]
+name = $^{40}_\Lambda\mathrm{Ca}$
+color = 0
+linestyle = -
+
+# label_dy shifts ONLY the spin label (MeV), for close doublets.
+[levels 3]
+# id energy width uncertainty j parity label_index jpi bottom top [options]
+8  0.0  -1.0  -1.0  1  1  1  right  None  None  link=4  link_color=0  link_style=--  link_width=0.5  label_dy=-0.045
+9  0.029  -1.0  -1.0  2  1  1  right  None  None  link=4  link_color=0  link_style=--  link_width=0.5  label_dy=0.035
+10  0.546  -1.0  -1.0  0  1  1  right  None  None  color=1  link=5  link_color=1  link_style=--  link_width=0.5
+11  0.984  -1.0  -1.0  1  1  2  right  None  None  color=1  link=5  link_color=1  link_style=--  link_width=0.5  label_dy=-0.11
+12  0.72  -1.0  -1.0  3  0  1  right  None  None  color=2  link=6  link_color=2  link_style=--  link_width=0.5  label_dy=0.045
+13  0.719  -1.0  -1.0  4  0  1  right  None  None  color=2  link=6  link_color=2  link_style=--  link_width=0.5  label_dy=-0.045
+14  0.987  -1.0  -1.0  1  0  1  right  None  None  color=3  link=7  link_color=3  link_style=--  link_width=0.5  label_dy=-0.015
+15  1.013  -1.0  -1.0  2  0  1  right  None  None  color=3  link=7  link_color=3  link_style=--  link_width=0.5  label_dy=0.07

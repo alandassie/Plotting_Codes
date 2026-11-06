@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
+r"""
 Created on Mon Jan 23 13:09:19 2017
 
 --- Energy profile diagram---
@@ -67,6 +67,10 @@ class ED:
         self.fig_yaxis_major = 1
         self.fig_yaxis_minor = 0.2
         self.fig_yaxis_label = "Energy (MeV)"
+        self.use_tex = False
+        self.font_size = 10
+        self.title_size = 11
+        self.label_offsets = []
         
     def fig_parameters(self, figratiox, figratioy, dpi, x_figsize, y_figsize, yminor, ymajor):
         '''
@@ -81,7 +85,7 @@ class ED:
         self.fig_yaxis_major = ymajor
 
     def add_level(self, energy, bottom_text='', position=None, color='k',
-                  top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-'):
+                  top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-', label_dy=0):
         '''
         Method of ED class
         This method add a new energy level to the plot.
@@ -129,6 +133,8 @@ class ED:
         self.right_texts.append(right_text)
         self.set_title.append(set_title)
         self.links.append(link)
+        self.arrows.append([])
+        self.label_offsets.append(label_dy)
         self.linestyle.append(linestyle)
 
     def add_arrow(self, start_level_id, end_level_id):
@@ -235,7 +241,7 @@ class ED:
 
 
     def plot(self, show_IDs=False):
-        '''
+        r'''
         Method of ED class
         Plot the energy diagram. Use show_IDs=True for showing the IDs of the
         energy levels and allowing an easy linking.
@@ -257,12 +263,12 @@ class ED:
 
         '''
         if using_scienceplots is True:
-            plt.style.use(['science','ieee'])
+            plt.style.use(['science','ieee', 'no-latex'] if not self.use_tex else ['science','ieee'])
         else:
             plt.rcParams.update({
                 "font.family": "serif",
                 "mathtext.fontset": "dejavuserif",
-                "text.usetex": True,
+                "text.usetex": self.use_tex,
                 "text.latex.preamble": r"\usepackage{amsmath} \usepackage{amssymb}"
             })
         #
@@ -280,9 +286,9 @@ class ED:
         ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_major))
         ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_minor))
         #
-        ax.set_ylabel(self.fig_yaxis_label, fontsize=16)
+        ax.set_ylabel(self.fig_yaxis_label, fontsize=self.title_size)
         for tick in ax.get_yticklabels():
-            tick.set_fontsize(14)
+            tick.set_fontsize(self.font_size)
         ax.axes.get_xaxis().set_visible(False)
         # ax.spines['top'].set_visible(False)
         # ax.spines['right'].set_visible(False)
@@ -303,8 +309,12 @@ class ED:
         numberoflevels = len(self.energies)
         minenergy = min(self.energies)
         maxenergy = max(self.energies)
-        move = max(abs(maxenergy),abs(minenergy))*self.fig_ratioy
-        ax.set_ylim(minenergy-move,maxenergy+move)
+        move = max(abs(maxenergy),abs(minenergy),1.0)*self.fig_ratioy
+        lower = min([minenergy] + [b[1]-b[2] for b in self.widths_boxes] + [b[1]-b[2] for b in self.errorbars])
+        upper = max([maxenergy] + [b[1]+b[2] for b in self.widths_boxes] + [b[1]+b[2] for b in self.errorbars])
+        if lower == upper:
+            move = max(move, .5)
+        ax.set_ylim(lower-move,upper+move)
         
         i = 1
         for level in data:
@@ -322,22 +332,22 @@ class ED:
                     level[0]+self.offset,  # Y
                     level[3],  # self.top_texts
                     horizontalalignment='center',
-                    fontsize=14,
+                    fontsize=self.font_size,
                     verticalalignment='bottom')
 
             ax.text((start + self.dimension)*1.01,  # X
-                    level[0],  # Y
+                    level[0] + self.label_offsets[i-1],  # Y
                     level[5],  # self.left_text
                     horizontalalignment='left',
-                    fontsize=14,
+                    fontsize=self.font_size,
                     verticalalignment='center',
                     color=self.color_left_text)
 
             ax.text(start*0.97,  # X
-                    level[0],  # Y
+                    level[0] + self.label_offsets[i-1],  # Y
                     level[6],  # self.right_text
                     horizontalalignment='right',
-                    fontsize=14,
+                    fontsize=self.font_size,
                     verticalalignment='center',
                     color=self.color_bottom_text)
 
@@ -345,7 +355,7 @@ class ED:
                     level[0] - self.offset*2,  # Y
                     level[2],  # self.bottom_text
                     horizontalalignment='center',
-                    fontsize=14,
+                    fontsize=self.font_size,
                     verticalalignment='top',
                     color=self.color_bottom_text)
             
@@ -353,7 +363,7 @@ class ED:
                     minenergy - self.offset*6,  # Y
                     level[8],  # self.bottom_text
                     horizontalalignment='center',
-                    fontsize=16,
+                    fontsize=self.title_size,
                     verticalalignment='top',
                     color=self.color_bottom_text)
             i += 1
@@ -366,8 +376,7 @@ class ED:
                    self.left_texts,  # 5
                    self.right_texts,  # 6
                    self.linestyle, # 7
-                   self.set_title,  # 8     
-                   self.widths)  # 9   
+                   self.set_title)  # 8
         
         if show_IDs:
             # for showing the ID allowing the user to identify the level
@@ -459,7 +468,9 @@ class ED:
 
         '''
         # Max range between the energy
-        Energy_variation = abs(max(self.energies) - min(self.energies))
+        if not self.energies:
+            raise ValueError('Add at least one energy level before plotting.')
+        Energy_variation = max(abs(max(self.energies) - min(self.energies)), 1e-3)
         if self.dimension == 'auto' or self.space == 'auto':
             # Unique positions of the levels
             unique_positions = float(len(set(self.positions)))
