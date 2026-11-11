@@ -17,6 +17,7 @@ https://github.com/giacomomarchioro/PyEnergyDiagrams
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import ConnectionPatch
 from box_notation import plot_orbital_boxes
 from width_notation import plot_width_boxes
 from errorbar_notation import plot_errorbar
@@ -33,6 +34,10 @@ class ED:
         self.ratio = 1.6181
         self.dimension = 'auto'
         self.space = 'auto'
+        self.column_width = 0.7  # level-line length as a fraction of the column pitch
+        self.axis_break = None  # None or flat tuple (low1, high1, low2, high2, ...) of displayed-energy gaps
+        self.ylabel_pad = 4.0  # padding between the y-axis label and the axis, in points
+        self.errorbar_head = 10.0  # error-bar cap size as a multiple of the level-line length
         self.offset = 'auto'
         self.offset_ratio = 0.008
         self.color_bottom_text = 'k'
@@ -51,6 +56,7 @@ class ED:
         self.set_title = []
         self.links = []
         self.linestyle = []
+        self.label_lines = []
         self.arrows = []
         self.electons_boxes = []
         self.widths_boxes = []
@@ -58,6 +64,9 @@ class ED:
         # matplotlib figure handlers
         self.fig = None
         self.ax = None
+        self.ax2 = None  # bottom panel when an axis break is active
+        self.axs = []
+        self.supylabel_text = None  # figure-level y label (axis-break mode)
         # Figure parameters
         self.fig_ratiox = 0.06
         self.fig_ratioy = 0.08
@@ -71,6 +80,10 @@ class ED:
         self.font_size = 10
         self.title_size = 11
         self.label_offsets = []
+        self.label_dx_offsets = []
+        # tiny white space between a level line and its label connector, as a
+        # fraction of the level-line length (0 disables the gap)
+        self.label_line_gap = 0.01
         
     def fig_parameters(self, figratiox, figratioy, dpi, x_figsize, y_figsize, yminor, ymajor):
         '''
@@ -85,7 +98,8 @@ class ED:
         self.fig_yaxis_major = ymajor
 
     def add_level(self, energy, bottom_text='', position=None, color='k',
-                  top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-', label_dy=0):
+                  top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-', label_dy=0,
+                  label_dx=0, label_line=False):
         '''
         Method of ED class
         This method add a new energy level to the plot.
@@ -107,6 +121,16 @@ class ED:
          top_text  : str
                  Text on the top of the level. By default it will print the
                  energy of the level. (default  'Energy')
+         label_dx : float
+                 Horizontal shift of the side label (left_text/right_text) in
+                 x data units, on top of its default position just past the
+                 end of the level line (default 0)
+         label_line : bool
+                 Draw a thin black connector from the end of the level line
+                 to the side label (left_text/right_text) of this level. The
+                 connector starts label_line_gap (fraction of the level-line
+                 length) past the end of the line, leaving a tiny white gap.
+                 (default False)
 
 
 
@@ -135,7 +159,9 @@ class ED:
         self.links.append(link)
         self.arrows.append([])
         self.label_offsets.append(label_dy)
+        self.label_dx_offsets.append(label_dx)
         self.linestyle.append(linestyle)
+        self.label_lines.append(bool(label_line))
 
     def add_arrow(self, start_level_id, end_level_id):
         '''
@@ -196,7 +222,7 @@ class ED:
         side = self.dimension
         high = uncertainty
         color = self.colors[level_id]
-        self.errorbars.append((x, y, high, color, side))
+        self.errorbars.append((x, y, high, color, side, self.errorbar_head))
 
     def add_widthbox(self,
                      level_id,
@@ -252,6 +278,14 @@ class ED:
         g|
         y|
 
+        If self.axis_break is a flat tuple (low1, high1, low2, high2, ...), the
+        energy axis is broken inside every (low, high) gap: one stacked panel
+        per energy range, all sharing the x axis, the spines facing each gap
+        are hidden and // marks are drawn, as in a classic broken-axis plot.
+        Levels, boxes, error bars and labels are clipped at each gap; links are
+        drawn once as continuous straight lines across the gaps, so they never
+        show a discontinuity at a break.
+
         Parameters
         ----------
         show_IDs : bool
@@ -259,7 +293,8 @@ class ED:
 
         Returns
         -------
-        fig (plt.figure) and ax (fig.add_subplot())
+        fig (plt.figure) and ax (the top panel; self.ax2 is the bottom panel
+        when an axis break is active, None otherwise)
 
         '''
         if using_scienceplots is True:
@@ -275,37 +310,10 @@ class ED:
         plt.rcParams.update({'figure.dpi': '%s'% self.fig_dpi})
         px = 1/plt.rcParams['figure.dpi']  # pixel in inches
         fig = plt.figure(figsize=(self.fig_xsize*px,self.fig_ysize*px))
-        ax = fig.add_subplot(111)
         colors = plt.get_cmap('tab10', 10)
-        # Edit the major and minor ticks of the x and y axes
-        ax.xaxis.set_tick_params(which='major', size=7, width=0.5, direction='in',top=True)
-        ax.xaxis.set_tick_params(which='minor', size=3, width=0.5, direction='in',top=True)
-        ax.yaxis.set_tick_params(which='major', size=7, width=0.5, direction='in',right=True)
-        ax.yaxis.set_tick_params(which='minor', size=3, width=0.5, direction='in',right=True)
-        # Edit the major and minor tick locations
-        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_major))
-        ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_minor))
-        #
-        ax.set_ylabel(self.fig_yaxis_label, fontsize=self.title_size)
-        for tick in ax.get_yticklabels():
-            tick.set_fontsize(self.font_size)
-        ax.axes.get_xaxis().set_visible(False)
-        # ax.spines['top'].set_visible(False)
-        # ax.spines['right'].set_visible(False)
-        # ax.spines['bottom'].set_visible(False)
 
         self.__auto_adjust()
 
-        data = zip(self.energies,  # 0
-                   self.positions,  # 1
-                   self.bottom_texts,  # 2
-                   self.top_texts,  # 3
-                   self.colors,  # 4
-                   self.left_texts,  # 5
-                   self.right_texts,  # 6
-                   self.linestyle, # 7
-                   self.set_title) # 8
-        
         numberoflevels = len(self.energies)
         minenergy = min(self.energies)
         maxenergy = max(self.energies)
@@ -314,8 +322,178 @@ class ED:
         upper = max([maxenergy] + [b[1]+b[2] for b in self.widths_boxes] + [b[1]+b[2] for b in self.errorbars])
         if lower == upper:
             move = max(move, .5)
-        ax.set_ylim(lower-move,upper+move)
-        
+
+        # One panel, or one panel per energy range when axis breaks are set
+        # (one extra panel per break). With breaks, every artist is drawn on
+        # every panel and clipped to each panel's y-range, so lines and links
+        # stop at each gap.
+        if self.axis_break is None:
+            axes = [fig.add_subplot(111)]
+            ylims = [(lower-move, upper+move)]
+            clip_texts = False
+        else:
+            breaks = [(self.axis_break[i], self.axis_break[i+1])
+                      for i in range(0, len(self.axis_break), 2)]  # ascending (lo, hi) gaps
+            for e in self.energies:
+                for bl, bh in breaks:
+                    if bl < e < bh:
+                        raise ValueError(f'level energy {e} lies inside the axis break ({bl}, {bh}); '
+                                         'move the break or the level')
+            npanels = len(breaks) + 1
+            top_range = max(upper+move-breaks[-1][1], 1e-3)
+            bottom_lo = lower-move
+            bottom_range = breaks[0][0]-bottom_lo
+            if bottom_range <= 0:  # nothing below the lowest break: keep a thin bottom panel
+                bottom_range = 0.05*top_range
+                bottom_lo = breaks[0][0]-bottom_range
+            # panel y-ranges, top -> bottom: top panel, one middle panel
+            # between consecutive gaps, bottom panel
+            ylims = [(breaks[-1][1], upper+move)]
+            ranges = [top_range]
+            for j in range(1, npanels-1):
+                ylo, yhi = breaks[len(breaks)-1-j][1], breaks[len(breaks)-j][0]
+                ylims.append((ylo, yhi))
+                ranges.append(max(yhi-ylo, 1e-3))
+            ylims.append((bottom_lo, breaks[0][0]))
+            ranges.append(bottom_range)
+            gs = fig.add_gridspec(npanels, 1, height_ratios=ranges)
+            ax_first = fig.add_subplot(gs[0])
+            axes = [ax_first] + [fig.add_subplot(gs[j], sharex=ax_first)
+                                 for j in range(1, npanels)]
+            clip_texts = True
+            # hide the spines facing each gap, then draw the // break marks
+            d = 0.5  # slant of the break marks
+            marks = dict(marker=[(-1, -d), (1, d)], markersize=12, linestyle='none',
+                         color='k', mec='k', mew=1, clip_on=False)
+            for j, ax in enumerate(axes):
+                if j < npanels-1:
+                    ax.spines['bottom'].set_visible(False)
+                    ax.plot([0, 1], [0, 0], transform=ax.transAxes, **marks)
+                if j > 0:
+                    ax.spines['top'].set_visible(False)
+                    ax.plot([0, 1], [1, 1], transform=ax.transAxes, **marks)
+            if hasattr(fig, 'supylabel'):
+                self.supylabel_text = fig.supylabel(self.fig_yaxis_label, fontsize=self.title_size)
+            else:
+                axes[-1].set_ylabel(self.fig_yaxis_label, fontsize=self.title_size,
+                                    labelpad=self.ylabel_pad)
+
+        # Column names (the dataset titles) are drawn as x tick labels below
+        # the bottom panel, so tight_layout reserves room for them and they are
+        # never clipped by the figure edge. On shared-x panels only the bottom
+        # one shows the labels.
+        titles = {}
+        for pos, title in zip(self.positions, self.set_title):
+            if title:
+                titles.setdefault(pos, str(title))
+        for j, ax in enumerate(axes):
+            if titles:
+                order = sorted(titles)
+                centers = [p*(self.dimension+self.space) + self.dimension/2. for p in order]
+                ax.set_xticks(centers)
+                ax.set_xticklabels([titles[p] for p in order], fontsize=self.title_size)
+                if j < len(axes)-1:
+                    ax.xaxis.set_tick_params(labelbottom=False)
+            else:
+                ax.set_xticks([])
+
+        # Return fig and ax
+        self.ax = axes[0]
+        self.ax2 = axes[-1] if len(axes) > 1 else None  # bottom panel when breaks are active
+        self.axs = axes
+        self.fig = fig
+
+        for ax, (ylo, yhi) in zip(axes, ylims):
+            self.__decorate_axis(ax)
+            ax.set_ylim(ylo, yhi)
+            if self.axis_break is None:
+                ax.set_ylabel(self.fig_yaxis_label, fontsize=self.title_size, labelpad=self.ylabel_pad)
+            self.__draw(ax, colors, show_IDs, minenergy, clip_texts)
+
+        if self.axis_break is not None:
+            # With breaks, each link is drawn once as a straight line in display
+            # space between its two endpoint panels (ConnectionPatch), so a
+            # link crossing a gap stays continuous instead of stopping at each
+            # panel edge. Added to the last panel (drawn last) with clipping
+            # off, so it can span the gaps.
+            for idx, link in enumerate(self.links):
+                for i in link:
+                    # i is a tuple: (end_level_id,ls,linewidth,color)
+                    start = self.positions[idx]*(self.dimension+self.space)
+                    x1 = start + self.dimension
+                    x2 = self.positions[i[0]]*(self.dimension+self.space)
+                    y1 = self.energies[idx]
+                    y2 = self.energies[i[0]]
+                    color = 'k' if i[3] == -1 else colors(i[3])
+                    con = ConnectionPatch((x1, y1), (x2, y2),
+                                          coordsA='data', coordsB='data',
+                                          axesA=self.ax_for_energy(y1),
+                                          axesB=self.ax_for_energy(y2),
+                                          ls=i[1], linewidth=i[2], color=color,
+                                          clip_on=False, zorder=3)
+                    axes[-1].add_patch(con)
+
+    def ax_for_energy(self, y):
+        '''Return the panel that displays the given data energy.'''
+        if self.ax2 is None:
+            return self.ax
+        for ax in self.axs:
+            ylo, yhi = ax.get_ylim()
+            if ylo <= y <= yhi:
+                return ax
+        return self.axs[-1]
+
+    def adjust_figure_ylabel(self):
+        '''Reposition the figure-level y label (axis-break mode) so it sits
+        self.ylabel_pad points left of the y tick labels. Call after the
+        figure layout is final (tight_layout / subplots_adjust).'''
+        t = self.supylabel_text
+        if t is None or self.fig is None or not self.axs:
+            return
+        fig = self.fig
+        x0 = None
+        try:
+            renderer = fig.canvas.get_renderer()
+            inv = fig.transFigure.inverted()
+            for ax in self.axs:
+                bb = ax.yaxis.get_tightbbox(renderer)
+                if bb is not None:
+                    fx = inv.transform((bb.x0, bb.y0))[0]
+                    x0 = fx if x0 is None else min(x0, fx)
+        except Exception:
+            x0 = None
+        if x0 is None:
+            x0 = min(ax.get_position().x0 for ax in self.axs)
+        width_in = fig.get_size_inches()[0]
+        t.set_x(max(x0 - self.ylabel_pad/72.0/width_in, 0.001))
+
+    def __decorate_axis(self, ax):
+        '''Tick and label layout shared by every panel.'''
+        # Edit the major and minor ticks of the x and y axes. The x tick marks
+        # are hidden (size 0): the x axis only carries the column-name labels.
+        ax.xaxis.set_tick_params(which='major', size=0, width=0, top=True)
+        ax.xaxis.set_tick_params(which='minor', size=0, width=0, top=True)
+        ax.yaxis.set_tick_params(which='major', size=7, width=0.5, direction='in',right=True)
+        ax.yaxis.set_tick_params(which='minor', size=3, width=0.5, direction='in',right=True)
+        # Edit the major and minor tick locations
+        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_major))
+        ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(self.fig_yaxis_minor))
+        for tick in ax.get_yticklabels():
+            tick.set_fontsize(self.font_size)
+
+    def __draw(self, ax, colors, show_IDs, minenergy, clip_texts):
+        '''Draw all levels, labels, leader lines, links and decorations on one panel.'''
+        data = list(zip(self.energies,  # 0
+                   self.positions,  # 1
+                   self.bottom_texts,  # 2
+                   self.top_texts,  # 3
+                   self.colors,  # 4
+                   self.left_texts,  # 5
+                   self.right_texts,  # 6
+                   self.linestyle, # 7
+                   self.set_title)) # 8
+
+        numberoflevels = len(self.energies)
         i = 1
         for level in data:
             start = level[1]*(self.dimension+self.space)
@@ -333,23 +511,26 @@ class ED:
                     level[3],  # self.top_texts
                     horizontalalignment='center',
                     fontsize=self.font_size,
-                    verticalalignment='bottom')
+                    verticalalignment='bottom',
+                    clip_on=clip_texts)
 
-            ax.text((start + self.dimension)*1.01,  # X
+            ax.text((start + self.dimension)*1.01 + self.label_dx_offsets[i-1],  # X
                     level[0] + self.label_offsets[i-1],  # Y
                     level[5],  # self.left_text
                     horizontalalignment='left',
                     fontsize=self.font_size,
                     verticalalignment='center',
-                    color=self.color_left_text)
+                    color=self.color_left_text,
+                    clip_on=clip_texts)
 
-            ax.text(start*0.97,  # X
+            ax.text(start*0.97 + self.label_dx_offsets[i-1],  # X
                     level[0] + self.label_offsets[i-1],  # Y
                     level[6],  # self.right_text
                     horizontalalignment='right',
                     fontsize=self.font_size,
                     verticalalignment='center',
-                    color=self.color_bottom_text)
+                    color=self.color_bottom_text,
+                    clip_on=clip_texts)
 
             ax.text(start + self.dimension/2.,  # X
                     level[0] - self.offset*2,  # Y
@@ -357,33 +538,34 @@ class ED:
                     horizontalalignment='center',
                     fontsize=self.font_size,
                     verticalalignment='top',
-                    color=self.color_bottom_text)
-            
-            ax.text(start + self.dimension/2.,  # X
-                    minenergy - self.offset*6,  # Y
-                    level[8],  # self.bottom_text
-                    horizontalalignment='center',
-                    fontsize=self.title_size,
-                    verticalalignment='top',
-                    color=self.color_bottom_text)
+                    color=self.color_bottom_text,
+                    clip_on=clip_texts)
+
+            if self.label_lines[i-1]:
+                # thin black connector from just past the end of the level
+                # line to the side label; label_line_gap leaves a tiny white
+                # space between the level line and the connector, and the
+                # connector follows the label_dx/label_dy label shift
+                dy = self.label_offsets[i-1]
+                dx = self.label_dx_offsets[i-1]
+                gap = self.label_line_gap*self.dimension
+                if level[5]:  # left_text is drawn just past the right end of the line
+                    x_end = start + self.dimension
+                    ax.add_line(Line2D([x_end + gap, x_end*1.01 + dx],
+                                       [level[0], level[0]+dy],
+                                       color='k', linewidth=0.75, zorder=4))
+                if level[6]:  # right_text is drawn just before the left end of the line
+                    ax.add_line(Line2D([start - gap, start*0.97 + dx],
+                                       [level[0], level[0]+dy],
+                                       color='k', linewidth=0.75, zorder=4))
             i += 1
-            
-        data = zip(self.energies,  # 0
-                   self.positions,  # 1
-                   self.bottom_texts,  # 2
-                   self.top_texts,  # 3
-                   self.colors,  # 4
-                   self.left_texts,  # 5
-                   self.right_texts,  # 6
-                   self.linestyle, # 7
-                   self.set_title)  # 8
-        
+
         if show_IDs:
             # for showing the ID allowing the user to identify the level
             for ind, level in enumerate(data):
                 start = level[1]*(self.dimension+self.space)
                 ax.text(start, level[0]+self.offset, str(ind),
-                        horizontalalignment='right', color='red')
+                        horizontalalignment='right', color='red', clip_on=clip_texts)
 
         for idx, arrow in enumerate(self.arrows):
             # by Kalyan Jyoti Kalita: put arrows between to levels
@@ -402,27 +584,31 @@ class ED:
                         bbox=dict(boxstyle='round', fc='white'),
                         ha='center', va = 'center')
 
-        for idx, link in enumerate(self.links):
-            # here we connect the levels with the links
-            # x1, x2   y1, y2
-            for i in link:
-                # i is a tuple: (end_level_id,ls,linewidth,color)
-                start = self.positions[idx]*(self.dimension+self.space)
-                x1 = start + self.dimension
-                x2 = self.positions[i[0]]*(self.dimension+self.space)
-                y1 = self.energies[idx]
-                y2 = self.energies[i[0]]
-                if i[3] == -1:
-                    line = Line2D([x1, x2], [y1, y2],
-                                ls=i[1],
-                                linewidth=i[2],
-                                color='k')
-                else:
-                    line = Line2D([x1, x2], [y1, y2],
-                                ls=i[1],
-                                linewidth=i[2],
-                                color=colors(i[3]))
-                ax.add_line(line)
+        if not clip_texts:
+            # Links in data coordinates per panel. With axis breaks they are
+            # drawn once as continuous ConnectionPatch lines in plot() instead,
+            # so they cross the gaps without a discontinuity.
+            for idx, link in enumerate(self.links):
+                # here we connect the levels with the links
+                # x1, x2   y1, y2
+                for i in link:
+                    # i is a tuple: (end_level_id,ls,linewidth,color)
+                    start = self.positions[idx]*(self.dimension+self.space)
+                    x1 = start + self.dimension
+                    x2 = self.positions[i[0]]*(self.dimension+self.space)
+                    y1 = self.energies[idx]
+                    y2 = self.energies[i[0]]
+                    if i[3] == -1:
+                        line = Line2D([x1, x2], [y1, y2],
+                                    ls=i[1],
+                                    linewidth=i[2],
+                                    color='k')
+                    else:
+                        line = Line2D([x1, x2], [y1, y2],
+                                    ls=i[1],
+                                    linewidth=i[2],
+                                    color=colors(i[3]))
+                    ax.add_line(line)
 
         for box in self.electons_boxes:
             # here we add the boxes
@@ -442,17 +628,13 @@ class ED:
 
         for errorbar in self.errorbars:
             # here we add the errorbars
-            # x,y,high,color,side
-            x, y, high, color_id, side = errorbar
+            # x,y,high,color,side,head
+            x, y, high, color_id, side, head = errorbar
             if color_id == -1:
                 color = 'k'
             else:
                 color = colors(color_id)
-            plot_errorbar(ax, x, y, high, color, side)
-
-        # Return fig and ax
-        self.ax = ax
-        self.fig = fig
+            plot_errorbar(ax, x, y, high, color, side, head)
 
     def __auto_adjust(self):
         '''
@@ -471,12 +653,13 @@ class ED:
         if not self.energies:
             raise ValueError('Add at least one energy level before plotting.')
         Energy_variation = max(abs(max(self.energies) - min(self.energies)), 1e-3)
+        w = self.column_width  # line length as a fraction of the column pitch
         if self.dimension == 'auto' or self.space == 'auto':
             # Unique positions of the levels
             unique_positions = float(len(set(self.positions)))
             space_for_level = Energy_variation*self.ratio/unique_positions
-            self.dimension = space_for_level*0.7
-            self.space = space_for_level*0.3
+            self.dimension = space_for_level*w
+            self.space = space_for_level*(1-w)
 
         if self.offset == 'auto':
             self.offset = Energy_variation*self.offset_ratio

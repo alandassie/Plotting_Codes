@@ -48,10 +48,12 @@ class Config:
 
 DEFAULTS = dict(output='energy_levels', format='pdf', dpi=350., size_px=(1200., 900.),
                 ticks=(.02, .2), x_margin=.5, y_margin=.05, width_alpha=.4,
-                width_spacing=.1, reference_energy=0., ylabel='Energy (MeV)', font_size=10., title_size=11.)
+                width_spacing=.1, reference_energy=0., ylabel='Energy (MeV)', font_size=10., title_size=11.,
+                label_line=False, axis_break=None, column_width=0.7, break_gap=0.04,
+                ylabel_pad=4.0, errorbar_head=10.0)
 STYLES = ('-', '--', ':', '-.')
 ALIASES = dict(C='color', LS='linestyle', L='link', LC='link_color', LLS='link_style', LLW='link_width')
-OPTIONS = ('color', 'linestyle', 'link', 'link_color', 'link_style', 'link_width', 'label_dy')
+OPTIONS = ('color', 'linestyle', 'link', 'link_color', 'link_style', 'link_width', 'label_dy', 'label_dx', 'label_line')
 
 def number(value, src, key, integer=False, minimum=None, maximum=None):
     try:
@@ -68,6 +70,14 @@ def style(value, src, key):
     if value not in STYLES:
         src.fail(key, f'choose one of {STYLES}, got {value!r}')
     return value
+
+def yes_no(value, src, key):
+    low = value.strip().lower()
+    if low in ('yes', 'true', '1'):
+        return True
+    if low in ('no', 'false', '0'):
+        return False
+    src.fail(key, f'use yes or no, got {value!r}')
 
 def tokens(src):
     lexer = shlex.shlex(src.text, posix=True)
@@ -119,6 +129,10 @@ def level(src):
             value = number(value, src, key, True, 0)
         elif key == 'label_dy':
             value = number(value, src, key)
+        elif key == 'label_dx':
+            value = number(value, src, key)
+        elif key == 'label_line':
+            value = yes_no(value, src, key)
         elif key == 'link_width':
             value = number(value, src, key, minimum=0)
             if value == 0:
@@ -143,6 +157,35 @@ def figure_value(key, value, src):
         if value not in ('pdf', 'png', 'jpg', 'jpeg', 'svg', 'eps', 'ps', 'pgf'):
             src.fail(key, 'choose pdf, png, jpg, jpeg, svg, eps, ps, or pgf')
         return value
+    if key == 'column_width':
+        val = number(value, src, key)
+        if not 0 < val < 1:
+            src.fail(key, 'must be greater than 0 and less than 1 (fraction of the column pitch)')
+        return val
+    if key == 'break_gap':
+        val = number(value, src, key)
+        if not 0 <= val <= 1:
+            src.fail(key, 'must be between 0 and 1 (fraction of the average panel height)')
+        return val
+    if key == 'label_line':
+        return yes_no(value, src, key)
+    if key == 'axis_break':
+        if value.strip().lower() in ('none', 'off', 'no'):
+            return None
+        parts = value.split(',')
+        if len(parts) < 2 or len(parts) % 2:
+            src.fail(key, 'use none, or pairs of comma-separated displayed-energy values: '
+                          'low1, high1, low2, high2, ... (one pair per break)')
+        vals = tuple(number(p.strip(), src, key) for p in parts)
+        for k in range(0, len(vals), 2):
+            lo, hi = vals[k], vals[k+1]
+            if not lo < hi:
+                src.fail(key, f'low ({lo}) must be smaller than high ({hi})')
+        for k in range(1, len(vals)-1, 2):
+            if not vals[k] < vals[k+1]:
+                src.fail(key, f'breaks must not overlap and must increase: '
+                              f'{vals[k]} must be smaller than {vals[k+1]}')
+        return vals
     if key in ('size_px', 'ticks'):
         parts = value.split(',')
         if len(parts) != 2:
@@ -160,6 +203,8 @@ def figure_value(key, value, src):
         src.fail(key, 'must be between 0 and 1')
     if key == 'width_spacing' and not 0 <= val < .5:
         src.fail(key, 'must be at least 0 and less than 0.5')
+    if key in ('ylabel_pad', 'errorbar_head') and val < 0:
+        src.fail(key, 'must be zero or greater')
     return val
 
 def read_input(path):
@@ -292,14 +337,31 @@ def validate(config, path):
             state.source.fail('link', f'unknown destination {dest}; available state IDs: {sorted(ids)}')
         if dest == state.id:
             state.source.fail('link', 'a state cannot link to itself')
+    brk = config.figure.get('axis_break')
+    if brk:
+        ref = config.figure['reference_energy']
+        for k in range(0, len(brk), 2):
+            lo, hi = brk[k], brk[k+1]
+            for state in ids.values():
+                disp = state.energy - ref
+                if lo < disp < hi:
+                    state.source.fail('axis_break',
+                                      f'displayed energy {disp} lies inside the break ({lo}, {hi}); '
+                                      'move the break or the level')
 
 def write_input(config, path):
+    def fmt(value):
+        if value is None:
+            return 'none'
+        if isinstance(value, bool):
+            return 'yes' if value else 'no'
+        if isinstance(value, tuple):
+            return ', '.join(map(str, value))
+        return value
     out = ['# Energies, widths and uncertainties: MeV. Full-line # comments only.',
            '# Quote level labels containing spaces. Scalar settings need no quotes.', '[figure]']
     for key, value in config.figure.items():
-        if isinstance(value, tuple):
-            value = ', '.join(map(str, value))
-        out.append(f'{key} = {value}')
+        out.append(f'{key} = {fmt(value)}')
     for i, ds in enumerate(config.datasets, 1):
         out += ['', f'[dataset {i}]', f'name = {ds.name}', f'color = {ds.color}',
                 f'linestyle = {ds.linestyle}', '', f'[levels {i}]',
@@ -314,5 +376,5 @@ def write_input(config, path):
                 raise InputError('Labels containing both quote types cannot be converted automatically.')
             parts = [s.id, s.energy, s.width, s.uncertainty, s.j, s.parity,
                      s.label_index, s.jpi, label(s.bottom), label(s.top)]
-            out.append('  '.join(map(str, parts)) + ''.join(f'  {k}={v}' for k, v in s.options.items()))
+            out.append('  '.join(map(str, parts)) + ''.join(f'  {k}={fmt(v)}' for k, v in s.options.items()))
     Path(path).write_text('\n'.join(out)+'\n', encoding='utf-8')

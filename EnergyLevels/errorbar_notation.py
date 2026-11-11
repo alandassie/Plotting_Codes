@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 
-def plot_errorbar (ax,x,y,state_uncertainty, colorin, box_side ):
+def plot_errorbar (ax,x,y,state_uncertainty, colorin, box_side, head_f = 10.0 ):
     X = x
     Yi = y - state_uncertainty
     Yf = y + state_uncertainty
-    head_width = box_side *10  # Width of the arrow heads
+    head_width = box_side * head_f  # Width of the arrow heads (0 draws no caps)
 
     #plot a symmetric errorbar using the function FancyArrowPatch 
     errorbar =  patches.FancyArrowPatch(

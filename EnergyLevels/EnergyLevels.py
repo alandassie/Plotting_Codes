@@ -4,7 +4,29 @@ import argparse
 from pathlib import Path
 import shutil
 import sys
+import warnings
 from input_format import InputError, read_input, write_input
+
+def apply_tight_layout(fig, hspace=None):
+    """Call fig.tight_layout, tolerating the 'Axes height small enough' warning.
+
+    With several axis-break panels the per-panel decorations (ticks, labels,
+    // marks) can be taller than the panels themselves; matplotlib then emits
+    'UserWarning: Tight layout not applied...' and skips the layout entirely.
+    Retry with progressively smaller padding, and if every attempt fails fall
+    back to fixed margins so the figure is still laid out sensibly.
+    """
+    for pad in (1.08, 0.5, 0.2, 0.05):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            fig.tight_layout(pad=pad)
+        if not any('Tight layout not applied' in str(w.message) for w in caught):
+            return
+    kwargs = {'left': 0.12, 'right': 0.98, 'top': 0.98, 'bottom': 0.1}
+    if hspace is not None:
+        kwargs['hspace'] = hspace
+    fig.subplots_adjust(**kwargs)
+
 
 def render(config, args):
     try:
@@ -30,6 +52,10 @@ def render(config, args):
     figure.title_size = f['title_size']
     figure.fig_yaxis_label = f['ylabel']
     figure.fig_parameters(f['x_margin'], f['y_margin'], f['dpi'], *f['size_px'], *f['ticks'])
+    figure.column_width = f['column_width']
+    figure.axis_break = f['axis_break']
+    figure.ylabel_pad = f['ylabel_pad']
+    figure.errorbar_head = f['errorbar_head']
     states = [s for ds in config.datasets for s in ds.levels]
     mapping = {s.id: i for i, s in enumerate(states)}
     for ds in config.datasets:
@@ -45,7 +71,9 @@ def render(config, args):
                              set_title=ds.name if i == 0 else '',
                              color=s.options.get('color', ds.color),
                              linestyle=s.options.get('linestyle', ds.linestyle),
-                             label_dy=s.options.get('label_dy', 0), **kwargs)
+                             label_dy=s.options.get('label_dy', 0),
+                             label_dx=s.options.get('label_dx', 0),
+                             label_line=s.options.get('label_line', f['label_line']), **kwargs)
     for s in states:
         index = mapping[s.id]
         if s.width > 0:
@@ -70,8 +98,16 @@ def render(config, args):
         if args.show_ids:
             for i, s in enumerate(states):
                 x = figure.positions[i]*(figure.dimension+figure.space)
-                figure.ax.text(x, figure.energies[i]+figure.offset*2, str(s.id), color='red', fontsize=9)
-        figure.fig.tight_layout()
+                figure.ax_for_energy(figure.energies[i]).text(x, figure.energies[i]+figure.offset*2,
+                                                              str(s.id), color='red', fontsize=9)
+        apply_tight_layout(figure.fig, f['break_gap'] if figure.ax2 is not None else None)
+        if figure.ax2 is not None:
+            # pin the white gap between the two break panels (hspace fraction);
+            # the gridspec itself stays untouched so tight_layout stays happy
+            figure.fig.subplots_adjust(hspace=f['break_gap'])
+            # now that the layout is final, place the figure-level y label
+            # ylabel_pad points away from the axis
+            figure.adjust_figure_ylabel()
         figure.fig.savefig(output, format=f['format'], dpi=f['dpi'])
         if args.show:
             plt.show()
