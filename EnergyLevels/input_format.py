@@ -50,11 +50,23 @@ class TextItem:
     source: Source = field(compare=False, default=None)
 
 @dataclass
+class Threshold:
+    y: float  # displayed energy (after reference_energy) of the horizontal line
+    color: int = -1  # -1 = black, else tab10 index
+    linestyle: str = '--'
+    width: float = 1.0  # line width in points
+    label: object = None  # text drawn on top of the line; None/'' = no label
+    label_x: float = 0.98  # horizontal position of the label, figure fraction 0..1
+    size: object = None  # label font size in points; None -> figure font_size
+    source: Source = field(compare=False, default=None)
+
+@dataclass
 class Config:
     figure: dict
     datasets: list
     legacy: bool = False
     texts: list = field(default_factory=list)
+    thresholds: list = field(default_factory=list)
 
 DEFAULTS = dict(output='energy_levels', format='pdf', dpi=350., size_px=(1200., 900.),
                 ticks=(.02, .2), x_margin=.5, y_margin=.05, width_alpha=.4,
@@ -124,6 +136,44 @@ def text_entry(head, rows):
     if not label:
         values['label'][1].fail('label', 'must not be empty')
     return TextItem(x, y, label, size, values['label'][1])
+
+def threshold_entry(head, rows):
+    values = {}
+    for src in rows:
+        if '=' not in src.text:
+            src.fail('setting', 'expected key = value')
+        key, val = (v.strip() for v in src.text.split('=', 1))
+        if key in values:
+            src.fail(key, 'duplicate setting')
+        if key not in ('y', 'color', 'linestyle', 'width', 'label', 'label_x', 'size'):
+            src.fail(key, 'threshold settings are y, color, linestyle, width, label, label_x, and size')
+        values[key] = (val, src)
+    if 'y' not in values:
+        head.fail('y', 'a [threshold N] section needs a y setting (displayed energy of the line)')
+    y = number(values['y'][0], values['y'][1], 'y')
+    color = -1
+    if 'color' in values:
+        color = number(values['color'][0], values['color'][1], 'color', True, -1, 9)
+    linestyle = '--'
+    if 'linestyle' in values:
+        linestyle = style(values['linestyle'][0], values['linestyle'][1], 'linestyle')
+    width = 1.0
+    if 'width' in values:
+        width = number(values['width'][0], values['width'][1], 'width', minimum=0)
+        if width <= 0:
+            values['width'][1].fail('width', 'must be greater than zero')
+    label = None
+    if 'label' in values:
+        label = unquote(values['label'][0], values['label'][1], 'label') or None
+    label_x = 0.98
+    if 'label_x' in values:
+        label_x = number(values['label_x'][0], values['label_x'][1], 'label_x', minimum=0, maximum=1)
+    size = None
+    if 'size' in values:
+        size = number(values['size'][0], values['size'][1], 'size')
+        if size <= 0:
+            values['size'][1].fail('size', 'must be greater than zero')
+    return Threshold(y, color, linestyle, width, label, label_x, size, values['y'][1])
 
 def number(value, src, key, integer=False, minimum=None, maximum=None):
     try:
@@ -294,8 +344,8 @@ def read_input(path):
             if match:
                 current = match[1].strip()
                 src.section = current
-                if current != 'figure' and not re.fullmatch(r'(dataset|levels|text) [1-9]\d*', current):
-                    src.fail('section', 'expected [figure], [dataset N], [levels N], or [text N]')
+                if current != 'figure' and not re.fullmatch(r'(dataset|levels|text|threshold) [1-9]\d*', current):
+                    src.fail('section', 'expected [figure], [dataset N], [levels N], [text N], or [threshold N]')
                 if current in sections:
                     src.fail('section', 'duplicate section')
                 sections[current] = (src, [])
@@ -306,7 +356,7 @@ def read_input(path):
         if 'figure' not in sections:
             raise InputError(f'{path}: missing [figure] section')
         fig = DEFAULTS.copy()
-        metadata, tables, texts = {}, {}, {}
+        metadata, tables, texts, thresholds = {}, {}, {}, {}
         for section, (head, rows) in sections.items():
             if section.startswith('levels '):
                 tables[section.split()[1]] = [level(s) for s in rows]
@@ -315,6 +365,9 @@ def read_input(path):
                 continue
             if section.startswith('text '):
                 texts[section.split()[1]] = text_entry(head, rows)
+                continue
+            if section.startswith('threshold '):
+                thresholds[section.split()[1]] = threshold_entry(head, rows)
                 continue
             values = {}
             for src in rows:
@@ -345,7 +398,8 @@ def read_input(path):
             datasets.append(Dataset(values.get('name', ''), int(values.get('color', '-1')),
                                     values.get('linestyle', '-'), tables[ident],
                                     values.get('name_pos', 'auto')))
-        config = Config(fig, datasets, texts=[texts[k] for k in sorted(texts, key=int)])
+        config = Config(fig, datasets, texts=[texts[k] for k in sorted(texts, key=int)],
+                         thresholds=[thresholds[k] for k in sorted(thresholds, key=int)])
     validate(config, path)
     return config
 
@@ -424,6 +478,11 @@ def validate(config, path):
                     state.source.fail('axis_break',
                                       f'displayed energy {disp} lies inside the break ({lo}, {hi}); '
                                       'move the break or the level')
+            for th in config.thresholds:
+                if lo < th.y < hi:
+                    th.source.fail('axis_break',
+                                   f'threshold y={th.y} lies inside the break ({lo}, {hi}); '
+                                   'move the break or the threshold')
 
 def write_input(config, path):
     def fmt(value):
@@ -453,4 +512,13 @@ def write_input(config, path):
         out += ['', f'[text {i}]', f'x = {t.x}', f'y = {t.y}', f'label = {quote_label(t.label)}']
         if t.size is not None:
             out.append(f'size = {t.size}')
+    for i, th in enumerate(config.thresholds, 1):
+        out += ['', f'[threshold {i}]', f'y = {th.y}', f'color = {th.color}',
+                f'linestyle = {th.linestyle}', f'width = {th.width}']
+        if th.label:
+            out.append(f'label = {quote_label(th.label)}')
+        if th.label_x != 0.98:
+            out.append(f'label_x = {th.label_x}')
+        if th.size is not None:
+            out.append(f'size = {th.size}')
     Path(path).write_text('\n'.join(out)+'\n', encoding='utf-8')

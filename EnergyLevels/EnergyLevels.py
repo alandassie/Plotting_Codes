@@ -77,6 +77,9 @@ def render(config, args):
                              label_line=s.options.get('label_line', f['label_line']), **kwargs)
     for t in config.texts:
         figure.add_text(t.x, t.y, t.label, t.size)
+    for th in config.thresholds:
+        figure.add_threshold(th.y, color=th.color, linestyle=th.linestyle, linewidth=th.width,
+                             label=th.label, label_x=th.label_x, size=th.size)
     for s in states:
         index = mapping[s.id]
         if s.width > 0:

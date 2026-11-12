@@ -18,6 +18,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import ConnectionPatch
+from matplotlib.transforms import blended_transform_factory
 from box_notation import plot_orbital_boxes
 from width_notation import plot_width_boxes
 from errorbar_notation import plot_errorbar
@@ -56,6 +57,7 @@ class ED:
         self.set_title = []
         self.name_pos = {}  # column position -> explicit (x, y) figure fractions for the name
         self.free_texts = []  # (x, y, text, size) free texts; x, y are figure fractions
+        self.thresholds = []  # (y, color, linestyle, linewidth, label, label_x, size)
         self.links = []
         self.linestyle = []
         self.label_lines = []
@@ -190,6 +192,36 @@ class ED:
                Font size in points; None uses self.font_size (default None)
         '''
         self.free_texts.append((x, y, text, size))
+
+    def add_threshold(self, y, color=-1, linestyle='--', linewidth=1.0,
+                      label=None, label_x=0.98, size=None):
+        '''
+        Method of ED class
+        Add a horizontal threshold line across the whole plot at the given
+        energy, optionally with a text label on top of it.
+
+        Parameters
+        ----------
+        y : float
+            Energy of the line in displayed units (MeV, after the reference
+            energy); with axis breaks the line is drawn on the panel that
+            contains y, and y must not lie inside a break gap.
+        color : int
+            -1 for black (default), otherwise a tab10 color index 0..9.
+        linestyle : str
+            '-', '--' (default), ':', or '-.'.
+        linewidth : float
+            Line width in points (default 1.0).
+        label : str or None
+            Text drawn just on top of the line, right-aligned at label_x
+            (default None: no label).
+        label_x : float
+            Horizontal position of the label as a fraction of the FIGURE
+            width, 0..1 (default 0.98, i.e. at the right edge).
+        size : float or None
+            Label font size in points; None uses self.font_size.
+        '''
+        self.thresholds.append((y, color, linestyle, linewidth, label, label_x, size))
 
     def add_arrow(self, start_level_id, end_level_id):
         '''
@@ -367,6 +399,11 @@ class ED:
                     if bl < e < bh:
                         raise ValueError(f'level energy {e} lies inside the axis break ({bl}, {bh}); '
                                          'move the break or the level')
+            for th in self.thresholds:
+                for bl, bh in breaks:
+                    if bl < th[0] < bh:
+                        raise ValueError(f'threshold energy {th[0]} lies inside the axis break ({bl}, {bh}); '
+                                         'move the break or the threshold')
             npanels = len(breaks) + 1
             top_range = max(upper+move-breaks[-1][1], 1e-3)
             bottom_lo = lower-move
@@ -456,6 +493,21 @@ class ED:
                      verticalalignment='center',
                      fontsize=size if size is not None else self.font_size,
                      clip_on=False)
+
+        # Threshold lines: one horizontal line per add_threshold(), drawn once
+        # on the panel that contains its energy and spanning the full panel
+        # width, with an optional label just on top of it (x = figure
+        # fraction, y = the line's energy; blended transform).
+        for y, color_id, ls, lw, label, label_x, size in self.thresholds:
+            ax = self.ax_for_energy(y)
+            color = 'k' if color_id == -1 else colors(color_id)
+            ax.axhline(y, color=color, linestyle=ls, linewidth=lw, clip_on=True, zorder=1)
+            if label:
+                trans = blended_transform_factory(fig.transFigure, ax.transData)
+                ax.text(label_x, y, label, transform=trans,
+                        horizontalalignment='right', verticalalignment='bottom',
+                        fontsize=size if size is not None else self.font_size,
+                        clip_on=False)
 
         if self.axis_break is not None:
             # With breaks, each link is drawn once as a straight line in display

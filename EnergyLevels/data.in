@@ -105,3 +105,15 @@ linestyle = -
 # label = "some note"   # quote labels containing spaces
 # size = 9.0            # optional, in points; default = font_size
 
+
+# Horizontal threshold line across the whole plot, at a displayed energy
+# (after reference_energy). Optional label drawn on top of the line.
+# [threshold 1]
+# y = 0.0
+# color = -1          # -1 = black, else tab10 index 0..9
+# linestyle = --      # -, --, :, -.
+# width = 1.0         # line width in points
+# label = "threshold" # optional text on top of the line; quote if it has spaces
+# label_x = 0.98      # optional: label position as a fraction of the figure width (0..1)
+# size = 9.0          # optional label size in points; default = font_size
+

@@ -210,3 +210,42 @@ Sections may appear in any order and need not be numbered contiguously, but
 each `[text N]` must be unique. Missing `x`, `y`, or `label`, unknown keys,
 and duplicate keys are rejected with a diagnostic naming the line.
 `--convert` writes the sections back (quoting the label when needed).
+
+## 10 / Horizontal threshold lines — `[threshold N]` sections
+
+Draw a horizontal line across the whole plot at a given energy, e.g. to mark
+a reaction threshold or the zero of the displayed energy. Each section needs
+only `y`; everything else is optional:
+
+| Setting | Default | Meaning / allowed values |
+| --- | --- | --- |
+|  y | required | Energy of the line in **displayed units** (after `reference_energy` is subtracted), same units as `axis_break`. With an axis break the line is drawn on the panel that contains y, and y must not lie inside a break gap (rejected with a diagnostic). |
+|  color | -1 | `-1` = black, otherwise a tab10 color index 0..9 (same convention as dataset `color`). |
+|  linestyle | -- | One of `-`, `--`, `:`, `-.`. |
+|  width | 1.0 | Line width in points; must be > 0. |
+|  label | none | Optional text drawn **on top of the line** (right-aligned, baseline on the line). Quote it if it contains spaces; math is fine. |
+|  label_x | 0.98 | Horizontal position of the label as a fraction of the **figure width**, 0..1 (default: right edge of the figure). |
+|  size | font_size | Label font size in points; must be > 0. |
+
+```ini
+[threshold 1]
+y = 0.0
+linestyle = --
+label = "threshold"
+
+[threshold 2]
+y = 2.36
+color = 1
+linestyle = :
+width = 2.0
+label = "Q = 2.36 MeV"
+label_x = 0.5
+size = 9.0
+```
+
+The line spans the full width of its panel and is drawn below the level
+lines. Sections may appear in any order; each `[threshold N]` must be unique.
+Missing `y`, unknown keys, and duplicate keys are rejected with a diagnostic
+naming the line. `--convert` writes the sections back (quoting the label when
+needed, omitting default `label_x`). Not available in the legacy
+`OUTPUT FILE` format.

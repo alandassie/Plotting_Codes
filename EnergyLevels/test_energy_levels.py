@@ -176,6 +176,47 @@ class Inputs(unittest.TestCase):
         self.assertIn('label = "a note"', written)
         self.assertIn('size = 9.0', written)
 
+    def test_threshold_sections(self):
+        # no threshold sections by default
+        self.assertEqual(self.parse(self.text).thresholds, [])
+        text = (self.text
+                + '\n[threshold 1]\ny = 0.5\n'
+                + '\n[threshold 2]\ny = 2.0\ncolor = 3\nlinestyle = :\nwidth = 2.5\n'
+                + 'label = "Q value"\nlabel_x = 0.9\nsize = 13\n')
+        config = self.parse(text)
+        self.assertEqual(len(config.thresholds), 2)
+        th1, th2 = config.thresholds
+        # defaults: black dashed 1.0 pt, no label, label at the right edge
+        self.assertEqual((th1.y, th1.color, th1.linestyle, th1.width, th1.label, th1.label_x, th1.size),
+                         (0.5, -1, '--', 1.0, None, 0.98, None))
+        self.assertEqual((th2.y, th2.color, th2.linestyle, th2.width, th2.label, th2.label_x, th2.size),
+                         (2.0, 3, ':', 2.5, 'Q value', 0.9, 13.0))
+        # errors
+        self.bad(self.text + '\n[threshold 1]\ncolor = 2\n', 'needs a y')
+        self.bad(self.text + '\n[threshold 1]\ny = q\n', 'finite number')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\nfoo = 3\n', 'threshold settings are')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\nwidth = 0\n', 'greater than zero')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\ncolor = 11\n', 'outside the allowed range')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\nlinestyle = x\n', 'choose one of')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\nlabel_x = 1.5\n', 'outside the allowed range')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\nsize = 0\n', 'greater than zero')
+        self.bad(self.text + '\n[threshold 1]\ny = 0.5\ny = 0.6\n', 'duplicate setting')
+        # a threshold inside an axis-break gap is rejected
+        self.bad(self.text.replace('axis_break = none', 'axis_break = 0.2, 0.5')
+                + '\n[threshold 1]\ny = 0.3\n', 'inside the break')
+        # round-trips through write_input
+        config = self.parse(text)
+        write_input(config, self.path)
+        again = read_input(self.path)
+        self.assertEqual(again.thresholds, config.thresholds)
+        self.assertEqual(again.datasets, config.datasets)
+        written = self.path.read_text()
+        self.assertIn('[threshold 1]', written)
+        self.assertIn('y = 0.5', written)
+        self.assertIn('label = "Q value"', written)
+        self.assertIn('label_x = 0.9', written)
+        self.assertIn('size = 13.0', written)
+
     def test_label_line_figure_default(self):
         config = self.parse(self.text.replace('label_line = no', 'label_line = yes'))
         self.assertIs(config.figure['label_line'], True)
@@ -410,6 +451,67 @@ label = note
         self.assertAlmostEqual(note[0].get_x(), 0.1)
         self.assertAlmostEqual(note[0].get_y(), 0.2)
         self.assertEqual(note[0].get_fontsize(), fig.font_size)
+
+    def test_render_threshold(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        from energydiagram import ED
+        self.path.write_text('''[figure]
+format = pdf
+axis_break = 0.5, 2.0
+[dataset 1]
+name = A
+[levels 1]
+100 0 -1 -1 1/2 + -1 left None None
+101 3 -1 -1 1/2 + -1 right None None
+[threshold 1]
+y = 0.25
+[threshold 2]
+y = 2.5
+color = 3
+linestyle = :
+width = 2.5
+label = thr
+label_x = 0.9
+size = 13
+''')
+        output = self.path.with_suffix('.pdf')
+        instances = []
+        class Capture(ED):
+            def __init__(self):
+                super().__init__()
+                instances.append(self)
+        with patch('energydiagram.ED', Capture), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.path), '-o', str(output)]), 0)
+        fig = instances[0]
+        self.assertEqual(len(fig.thresholds), 2)
+        # each line is drawn once, on the panel that contains its energy
+        def th_lines(ax):
+            return [ln for ln in ax.lines if ln.get_xdata() == [0, 1]
+                    and ln.get_zorder() == 1]
+        bottom, top = fig.ax2, fig.ax  # ax = top panel, ax2 = bottom panel
+        self.assertEqual(len(th_lines(bottom)), 1)
+        self.assertEqual(len(th_lines(top)), 1)
+        lo = th_lines(bottom)[0]
+        hi = th_lines(top)[0]
+        self.assertEqual(lo.get_ydata(), [0.25, 0.25])
+        self.assertEqual(lo.get_color(), 'k')          # default color -1
+        self.assertEqual(lo.get_linestyle(), '--')      # default style
+        self.assertEqual(lo.get_linewidth(), 1.0)       # default width
+        self.assertEqual(hi.get_ydata(), [2.5, 2.5])
+        self.assertEqual(hi.get_color(), 'C3')
+        self.assertEqual(hi.get_linestyle(), ':')
+        self.assertEqual(hi.get_linewidth(), 2.5)
+        # only the labelled threshold gets a text, on top of the line (va=bottom)
+        labels = [t for t in top.texts if t.get_text() == 'thr']
+        self.assertEqual(len(labels), 1)
+        self.assertAlmostEqual(labels[0].get_x(), 0.9)   # figure fraction
+        self.assertAlmostEqual(labels[0].get_y(), 2.5)   # on the line
+        self.assertEqual(labels[0].get_fontsize(), 13)
+        self.assertEqual(labels[0].kwargs.get('verticalalignment'), 'bottom')
+        self.assertEqual(labels[0].kwargs.get('horizontalalignment'), 'right')
+        self.assertIs(labels[0].kwargs.get('clip_on'), False)
+        self.assertEqual([t.get_text() for t in bottom.texts if t.get_text() == 'thr'], [])
 
     def test_axis_break_setting(self):
         config = self.parse(self.text.replace('axis_break = none', 'axis_break = 1.1, 2.4'))
