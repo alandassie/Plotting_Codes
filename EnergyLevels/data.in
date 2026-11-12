@@ -52,8 +52,8 @@ title_size = 11.0
 [dataset 1]
 name = Exp-$^{39}$Ca-
 # name_pos = auto (default) keeps the name as the x tick label centered under
-# the column. Give two comma-separated data coordinates to draw the name as a
-# text at that (x, y) position instead, e.g. name_pos = 2.5, 0.8
+# the column. Give two comma-separated figure coordinates to draw the name as a
+# text at that (x, y) position instead, e.g. name_pos = 0.2, 0.8
 # name_pos = auto
 color = -1
 linestyle = -
@@ -98,10 +98,10 @@ linestyle = -
 15  3.013  -1.0  -1.0  2  0  1  right  None  None  color=3  link=7  link_color=3  link_style=--  link_width=0.5  label_dy=0.07
 16  6.013  -1.0  -1.0  5  0  1  right  None  None  color=3  link=4  link_color=4  link_style=--  link_width=0.5
 
-# Free-floating text drawn anywhere in the plot, in data coordinates.
+# Free-floating text drawn anywhere in the plot
 # [text 1]
 # x = 0.5
-# y = 1.2
+# y = 0.2
 # label = "some note"   # quote labels containing spaces
 # size = 9.0            # optional, in points; default = font_size
 

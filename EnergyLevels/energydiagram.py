@@ -54,8 +54,8 @@ class ED:
         self.left_texts = []
         self.right_texts = []
         self.set_title = []
-        self.name_pos = {}  # column position -> explicit (x, y) for the dataset name
-        self.free_texts = []  # (x, y, text, size) free-floating labels
+        self.name_pos = {}  # column position -> explicit (x, y) figure fractions for the name
+        self.free_texts = []  # (x, y, text, size) free texts; x, y are figure fractions
         self.links = []
         self.linestyle = []
         self.label_lines = []
@@ -135,10 +135,11 @@ class ED:
                  level-line length) at BOTH ends, leaving a white gap next to
                  the level line and next to the label. (default False)
          set_title_pos : tuple or None
-                 Explicit (x, y) data coordinates for the dataset name
-                 (set_title) of this level's column. None keeps the default:
-                 the name is drawn as an x tick label under the column center.
-                 (default None)
+                 Explicit (x, y) position for the dataset name (set_title) of
+                 this level's column, as fractions of the FIGURE size (0..1 of
+                 width/height), drawn as a centered text. None keeps the
+                 default: the name is drawn as an x tick label under the
+                 column center. (default None)
 
 
 
@@ -176,12 +177,13 @@ class ED:
     def add_text(self, x, y, text, size=None):
         '''
         Method of ED class
-        Add a free-floating text label at data coordinates (x, y).
+        Add a free-floating text label at figure coordinates (x, y): fractions
+        of the figure width/height (0..1), independent of the data scale.
 
         Parameters
         ----------
         x, y : float
-               Position in data coordinates
+               Position as fractions of the figure size, each in [0, 1]
         text : str
                The text to draw
         size : float or None
@@ -437,22 +439,23 @@ class ED:
             self.__draw(ax, colors, show_IDs, minenergy, clip_texts)
 
         # Dataset names with an explicit position, and free texts, are drawn
-        # once as plain text on the panel that contains their y coordinate
-        # (clipped per panel when axis breaks are active).
+        # once as plain texts in FIGURE coordinates (x, y are fractions of the
+        # figure width/height), so they land identically with or without axis
+        # breaks and are never clipped by a panel edge.
         for pos, (tx, ty) in self.name_pos.items():
             title = titles.get(pos)
             if title:
-                self.ax_for_energy(ty).text(tx, ty, title,
-                                            horizontalalignment='center',
-                                            verticalalignment='center',
-                                            fontsize=self.title_size,
-                                            clip_on=clip_texts)
+                fig.text(tx, ty, title,
+                         horizontalalignment='center',
+                         verticalalignment='center',
+                         fontsize=self.title_size,
+                         clip_on=False)
         for tx, ty, text, size in self.free_texts:
-            self.ax_for_energy(ty).text(tx, ty, text,
-                                        horizontalalignment='center',
-                                        verticalalignment='center',
-                                        fontsize=size if size is not None else self.font_size,
-                                        clip_on=clip_texts)
+            fig.text(tx, ty, text,
+                     horizontalalignment='center',
+                     verticalalignment='center',
+                     fontsize=size if size is not None else self.font_size,
+                     clip_on=False)
 
         if self.axis_break is not None:
             # With breaks, each link is drawn once as a straight line in display

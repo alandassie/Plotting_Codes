@@ -162,42 +162,47 @@ errorbar_head = 10.0   # default
 
 | Setting | Default | Meaning / allowed values |
 | --- | --- | --- |
-|  name_pos | auto | `auto`, or two comma-separated numbers `x, y` in data coordinates. `auto` draws the dataset `name` as an x tick label centered under its column, below the bottom panel (the behavior of section 2). `x, y` instead draws the name as a regular centered text at that position, at `title_size` points, and the column then has no tick label. With an axis break the name is drawn on the panel that contains the given y. |
+|  name_pos | auto | `auto`, or two comma-separated numbers `x, y` in **figure fractions**: x = fraction of the figure width from the left, y = fraction of the figure height from the bottom, each in [0, 1]. `auto` draws the dataset `name` as an x tick label centered under its column, below the bottom panel (the behavior of section 2). `x, y` instead draws the name as a centered text at that relative figure position, at `title_size` points, and the column then has no tick label. |
 
 ```ini
 [dataset 1]
 name = Exp-$^{39}$Ca-
-name_pos = auto        # default: tick label under the column center
-# name_pos = 2.5, 0.8  # draw "Exp-$^{39}$Ca-" as a text at x=2.5, y=0.8
+name_pos = auto         # default: tick label under the column center
+# name_pos = 0.25, 0.8  # name drawn at 25% of the figure width, 80% of its height
 ```
 
 Use this to move a column title out from under the axis, e.g. above the
-column or into empty space. Invalid values (a single number, non-numbers) are
-rejected with a diagnostic. `--convert` writes the setting back as
-`name_pos = x, y` (omitted when `auto`). Not available in the legacy
+columns or into empty space. Because the position is relative to the figure
+(not the data scale), it lands identically with or without an axis break and
+is never clipped by a panel. Values outside [0, 1], a single number, or
+non-numbers are rejected with a diagnostic. `--convert` writes the setting
+back as `name_pos = x, y` (omitted when `auto`). Not available in the legacy
 `OUTPUT FILE` format (it stays `auto`).
 
 ## 9 / Free-floating text — `[text N]` sections
 
-Add any text anywhere in the plot, in data coordinates. Each section needs
-`x`, `y`, and `label`; `size` is optional:
+Add any text anywhere on the figure. Positions are **figure fractions**, not
+data coordinates: x = fraction of the figure width from the left, y = fraction
+of the figure height from the bottom, each in [0, 1] — so the text stays put
+regardless of the energy range or axis breaks. Each section needs `x`, `y`,
+and `label`; `size` is optional:
 
 | Setting | Default | Meaning / allowed values |
 | --- | --- | --- |
-|  x, y | required | Position in data coordinates (same units as the energies and column positions). With an axis break the text is drawn on the panel containing y. |
+|  x, y | required | Position as fractions of the figure size, each in [0, 1] (e.g. `0.5, 0.5` = figure center). Values outside [0, 1] are rejected. |
 |  label | required | The text itself. Quote it if it contains spaces (`label = "some note"`); math is fine (`label = "$\Lambda$"`). |
 |  size | font_size | Font size in points; must be > 0. |
 
 ```ini
 [text 1]
 x = 0.5
-y = 1.2
+y = 0.9
 label = "some note"
 size = 9.0
 
 [text 2]
-x = 2.0
-y = -0.5
+x = 0.1
+y = 0.05
 label = g.s.
 ```
 

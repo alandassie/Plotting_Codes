@@ -121,15 +121,20 @@ class Inputs(unittest.TestCase):
     def test_name_pos_setting(self):
         # default is auto (x tick label under the column center)
         self.assertEqual(self.parse(self.text).datasets[0].name_pos, 'auto')
+        # x, y are fractions of the FIGURE size, each in [0, 1]
         text = self.text.replace('name = Exp-$^{39}$Ca-',
-                                 'name = Exp-$^{39}$Ca-\nname_pos = 2.5, 0.8')
+                                 'name = Exp-$^{39}$Ca-\nname_pos = 0.25, 0.8')
         config = self.parse(text)
-        self.assertEqual(config.datasets[0].name_pos, (2.5, 0.8))
+        self.assertEqual(config.datasets[0].name_pos, (0.25, 0.8))
         self.assertEqual(config.datasets[1].name_pos, 'auto')
         self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
-                                   'name = Exp-$^{39}$Ca-\nname_pos = 2.5'), 'x, y')
+                                   'name = Exp-$^{39}$Ca-\nname_pos = 0.25'), 'x, y')
         self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
                                    'name = Exp-$^{39}$Ca-\nname_pos = banana, 1'), 'finite number')
+        self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
+                                   'name = Exp-$^{39}$Ca-\nname_pos = 1.5, 0.8'), 'outside the allowed range')
+        self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
+                                   'name = Exp-$^{39}$Ca-\nname_pos = 0.5, -0.1'), 'outside the allowed range')
         self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
                                    'name = Exp-$^{39}$Ca-\nname_posx = 1, 2'), 'dataset settings are')
         # round-trips through write_input
@@ -137,26 +142,29 @@ class Inputs(unittest.TestCase):
         write_input(config, self.path)
         again = read_input(self.path)
         self.assertEqual(again.datasets, config.datasets)
-        self.assertIn('name_pos = 2.5, 0.8', self.path.read_text())
+        self.assertIn('name_pos = 0.25, 0.8', self.path.read_text())
 
     def test_text_sections(self):
         # no text sections by default
         self.assertEqual(self.parse(self.text).texts, [])
+        # x, y are fractions of the FIGURE size, each in [0, 1]
         text = (self.text
-                + '\n[text 1]\nx = 1.5\ny = -0.2\nlabel = g.s.\nsize = 9\n'
+                + '\n[text 1]\nx = 0.75\ny = 0.2\nlabel = g.s.\nsize = 9\n'
                 + '\n[text 2]\nx = 0\ny = 0.5\nlabel = "a note"\n')
         config = self.parse(text)
         self.assertEqual(len(config.texts), 2)
         t1, t2 = config.texts
-        self.assertEqual((t1.x, t1.y, t1.label, t1.size), (1.5, -0.2, 'g.s.', 9.0))
+        self.assertEqual((t1.x, t1.y, t1.label, t1.size), (0.75, 0.2, 'g.s.', 9.0))
         self.assertEqual((t2.x, t2.y, t2.label, t2.size), (0.0, 0.5, 'a note', None))
         # errors
-        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\n', 'needs x, y, and label')
-        self.bad(self.text + '\n[text 1]\nx = 1\nlabel = a\n', 'needs x, y, and label')
-        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\nlabel = a\nfoo = 3\n', 'text settings are')
-        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\nlabel = a\nsize = 0\n', 'greater than zero')
-        self.bad(self.text + '\n[text 1]\nx = q\ny = 2\nlabel = a\n', 'finite number')
-        self.bad(self.text + '\n[text 1]\nx = 1\nx = 2\ny = 2\nlabel = a\n', 'duplicate setting')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\ny = 0.5\n', 'needs x, y, and label')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\nlabel = a\n', 'needs x, y, and label')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\ny = 0.5\nlabel = a\nfoo = 3\n', 'text settings are')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\ny = 0.5\nlabel = a\nsize = 0\n', 'greater than zero')
+        self.bad(self.text + '\n[text 1]\nx = q\ny = 0.5\nlabel = a\n', 'finite number')
+        self.bad(self.text + '\n[text 1]\nx = 1.2\ny = 0.5\nlabel = a\n', 'outside the allowed range')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\ny = -0.1\nlabel = a\n', 'outside the allowed range')
+        self.bad(self.text + '\n[text 1]\nx = 0.5\nx = 0.6\ny = 0.5\nlabel = a\n', 'duplicate setting')
         # round-trips through write_input
         config = self.parse(text)
         write_input(config, self.path)
@@ -358,7 +366,7 @@ name = B
 [levels 2]
 101 1 -1 -1 1/2 + -1 right None None
 [text 1]
-x = 1.2
+x = 0.8
 y = 0.5
 label = hello
 size = 12
@@ -380,19 +388,22 @@ label = note
         self.assertEqual([l.get_text() for l in fig.ax.get_xticklabels()], ['B'])
         pitch = fig.dimension + fig.space
         self.assertAlmostEqual(fig.ax.get_xticks()[0], 2*pitch + fig.dimension/2)
-        # A is drawn as a text at the explicit (x, y), at title_size
+        # A is drawn once as a FIGURE-level text at the explicit figure
+        # fractions (x, y), at title_size, and not on any panel
         self.assertEqual(fig.name_pos, {1: (0.3, 0.9)})
-        names = [t for t in fig.ax.texts if t.get_text() == 'A']
+        self.assertNotIn('A', [t.get_text() for t in fig.ax.texts])
+        names = [t for t in fig.fig.texts if t.get_text() == 'A']
         self.assertEqual(len(names), 1)
         self.assertAlmostEqual(names[0].get_x(), 0.3)
         self.assertAlmostEqual(names[0].get_y(), 0.9)
         self.assertEqual(names[0].get_fontsize(), fig.title_size)
-        # free texts land at their coordinates, with size or the default font_size
+        self.assertIs(names[0].kwargs.get('clip_on'), False)
+        # free texts land at their figure fractions, size or default font_size
         self.assertEqual(len(fig.free_texts), 2)
-        hello = [t for t in fig.ax.texts if t.get_text() == 'hello']
-        note = [t for t in fig.ax.texts if t.get_text() == 'note']
+        hello = [t for t in fig.fig.texts if t.get_text() == 'hello']
+        note = [t for t in fig.fig.texts if t.get_text() == 'note']
         self.assertEqual(len(hello), 1)
-        self.assertAlmostEqual(hello[0].get_x(), 1.2)
+        self.assertAlmostEqual(hello[0].get_x(), 0.8)
         self.assertAlmostEqual(hello[0].get_y(), 0.5)
         self.assertEqual(hello[0].get_fontsize(), 12)
         self.assertEqual(len(note), 1)

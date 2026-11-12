@@ -39,12 +39,12 @@ class Dataset:
     color: int
     linestyle: str
     levels: list
-    name_pos: object = 'auto'  # 'auto' or an (x, y) tuple of data coordinates
+    name_pos: object = 'auto'  # 'auto' or an (x, y) tuple of figure fractions in [0, 1]
 
 @dataclass
 class TextItem:
-    x: float
-    y: float
+    x: float  # fraction of the figure width, 0..1
+    y: float  # fraction of the figure height, 0..1
     label: str
     size: object = None  # font size in points; None -> figure font_size
     source: Source = field(compare=False, default=None)
@@ -96,8 +96,8 @@ def name_pos_value(value, src):
         return 'auto'
     parts = value.split(',')
     if len(parts) != 2:
-        src.fail('name_pos', 'use auto, or two comma-separated numbers: x, y')
-    return tuple(number(p.strip(), src, 'name_pos') for p in parts)
+        src.fail('name_pos', 'use auto, or two comma-separated numbers between 0 and 1: x, y')
+    return tuple(number(p.strip(), src, 'name_pos', minimum=0, maximum=1) for p in parts)
 
 def text_entry(head, rows):
     values = {}
@@ -113,8 +113,8 @@ def text_entry(head, rows):
     for req in ('x', 'y', 'label'):
         if req not in values:
             head.fail(req, 'a [text N] section needs x, y, and label settings')
-    x = number(values['x'][0], values['x'][1], 'x')
-    y = number(values['y'][0], values['y'][1], 'y')
+    x = number(values['x'][0], values['x'][1], 'x', minimum=0, maximum=1)
+    y = number(values['y'][0], values['y'][1], 'y', minimum=0, maximum=1)
     size = None
     if 'size' in values:
         size = number(values['size'][0], values['size'][1], 'size')
