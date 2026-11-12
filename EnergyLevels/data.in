@@ -48,6 +48,9 @@ ylabel = $\mathrm{E_x}$ (MeV)
 font_size = 10.0
 # Dataset titles and axis label, in points.
 title_size = 11.0
+# Color of the bottom and top level texts (the labels under/over each level
+# line): black (default) or level (same color as that level's line).
+# text_color = black
 
 [dataset 1]
 name = Exp-$^{39}$Ca-

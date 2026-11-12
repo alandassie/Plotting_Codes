@@ -56,6 +56,7 @@ def render(config, args):
     figure.axis_break = f['axis_break']
     figure.ylabel_pad = f['ylabel_pad']
     figure.errorbar_head = f['errorbar_head']
+    figure.text_color = f['text_color']
     states = [s for ds in config.datasets for s in ds.levels]
     mapping = {s.id: i for i, s in enumerate(states)}
     for ds in config.datasets:

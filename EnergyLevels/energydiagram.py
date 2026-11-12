@@ -43,6 +43,7 @@ class ED:
         self.offset_ratio = 0.008
         self.color_bottom_text = 'k'
         self.color_left_text = 'k'
+        self.text_color = 'black'  # 'black' (default) or 'level': color of the top/bottom texts
         self.aspect = aspect
         # data
         self.pos_number = 0
@@ -605,12 +606,18 @@ class ED:
                 ax.hlines(level[0], start, start + self.dimension, color='k',linestyle=level[7], linewidth=1.5)
             else:
                 ax.hlines(level[0], start, start + self.dimension, color=colors(level[4]),linestyle=level[7], linewidth=1.5)
+            # color of the top/bottom texts: black by default, or the level's own color
+            if self.text_color == 'level':
+                tcolor = 'k' if level[4] == -1 else colors(level[4])
+            else:
+                tcolor = self.color_bottom_text
             ax.text(start+self.dimension/2.,  # X
                     level[0]+self.offset,  # Y
                     level[3],  # self.top_texts
                     horizontalalignment='center',
                     fontsize=self.font_size,
                     verticalalignment='bottom',
+                    color=tcolor,
                     clip_on=clip_texts)
 
             ax.text((start + self.dimension)*1.01 + self.label_dx_offsets[i-1],  # X
@@ -637,7 +644,7 @@ class ED:
                     horizontalalignment='center',
                     fontsize=self.font_size,
                     verticalalignment='top',
-                    color=self.color_bottom_text,
+                    color=tcolor,
                     clip_on=clip_texts)
 
             if self.label_lines[i-1]:

@@ -249,3 +249,18 @@ Missing `y`, unknown keys, and duplicate keys are rejected with a diagnostic
 naming the line. `--convert` writes the sections back (quoting the label when
 needed, omitting default `label_x`). Not available in the legacy
 `OUTPUT FILE` format.
+
+## 11 / Color of the bottom/top texts — `[figure]` setting `text_color`
+
+| Setting | Default | Meaning / allowed values |
+| --- | --- | --- |
+|  text_color | black | `black` (default): the text under and over each level line (the `bottom`/`top` fields of a state row) is black. `level`: each of those texts takes the color of its own level line (black for `color = -1` levels, otherwise the level's tab10 color). The side spin-parity labels are unaffected and stay black. |
+
+```ini
+[figure]
+text_color = black   # default
+# text_color = level # bottom/top texts colored like their level line
+```
+
+Any other value is rejected with a diagnostic. `--convert` writes the setting
+back. Not available in the legacy `OUTPUT FILE` format (it stays `black`).

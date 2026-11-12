@@ -217,6 +217,23 @@ class Inputs(unittest.TestCase):
         self.assertIn('label_x = 0.9', written)
         self.assertIn('size = 13.0', written)
 
+    def test_text_color_setting(self):
+        # default: black top/bottom texts
+        self.assertEqual(self.parse(self.text).figure['text_color'], 'black')
+        text = self.text.replace('errorbar_head = 10.0',
+                                 'errorbar_head = 10.0\ntext_color = level')
+        config = self.parse(text)
+        self.assertEqual(config.figure['text_color'], 'level')
+        self.bad(self.text.replace('errorbar_head = 10.0',
+                                   'errorbar_head = 10.0\ntext_color = red'), 'use black or level')
+        self.bad(self.text.replace('errorbar_head = 10.0',
+                                   'errorbar_head = 10.0\ntext_color = 2'), 'use black or level')
+        # round-trips through write_input
+        write_input(config, self.path)
+        again = read_input(self.path)
+        self.assertEqual(again.figure, config.figure)
+        self.assertIn('text_color = level', self.path.read_text())
+
     def test_label_line_figure_default(self):
         config = self.parse(self.text.replace('label_line = no', 'label_line = yes'))
         self.assertIs(config.figure['label_line'], True)
@@ -512,6 +529,46 @@ size = 13
         self.assertEqual(labels[0].kwargs.get('horizontalalignment'), 'right')
         self.assertIs(labels[0].kwargs.get('clip_on'), False)
         self.assertEqual([t.get_text() for t in bottom.texts if t.get_text() == 'thr'], [])
+
+    def test_render_text_color(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        from energydiagram import ED
+        base = '''[figure]
+format = pdf
+%s
+[dataset 1]
+name = A
+color = 2
+[levels 1]
+100 0 -1 -1 1/2 + -1 left g.s. "0.0 MeV"
+'''
+        def render(extra):
+            self.path.write_text(base % extra)
+            output = self.path.with_suffix('.pdf')
+            instances = []
+            class Capture(ED):
+                def __init__(self):
+                    super().__init__()
+                    instances.append(self)
+            with patch('energydiagram.ED', Capture), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main([str(self.path), '-o', str(output), '--force']), 0)
+            return instances[0]
+        def texts(fig, s):
+            return [t for t in fig.ax.texts if t.get_text() == s]
+        # default (black): top and bottom texts are black
+        fig = render('')
+        self.assertEqual(fig.text_color, 'black')
+        self.assertEqual(texts(fig, '0.0 MeV')[0].kwargs.get('color'), 'k')
+        self.assertEqual(texts(fig, 'g.s.')[0].kwargs.get('color'), 'k')
+        # text_color = level: top and bottom texts take the level's color (C2)
+        fig = render('text_color = level\n')
+        self.assertEqual(fig.text_color, 'level')
+        self.assertEqual(texts(fig, '0.0 MeV')[0].kwargs.get('color'), 'C2')
+        self.assertEqual(texts(fig, 'g.s.')[0].kwargs.get('color'), 'C2')
+        # the side spin-parity label keeps its own (black) color
+        side = [t for t in fig.ax.texts if t.get_text().startswith('$1/2')]
+        self.assertEqual(side[0].kwargs.get('color'), 'k')
 
     def test_axis_break_setting(self):
         config = self.parse(self.text.replace('axis_break = none', 'axis_break = 1.1, 2.4'))

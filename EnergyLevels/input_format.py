@@ -72,7 +72,7 @@ DEFAULTS = dict(output='energy_levels', format='pdf', dpi=350., size_px=(1200., 
                 ticks=(.02, .2), x_margin=.5, y_margin=.05, width_alpha=.4,
                 width_spacing=.1, reference_energy=0., ylabel='Energy (MeV)', font_size=10., title_size=11.,
                 label_line=False, axis_break=None, column_width=0.7, break_gap=0.04,
-                ylabel_pad=4.0, errorbar_head=10.0)
+                ylabel_pad=4.0, errorbar_head=10.0, text_color='black')
 STYLES = ('-', '--', ':', '-.')
 ALIASES = dict(C='color', LS='linestyle', L='link', LC='link_color', LLS='link_style', LLW='link_width')
 OPTIONS = ('color', 'linestyle', 'link', 'link_color', 'link_style', 'link_width', 'label_dy', 'label_dx', 'label_line')
@@ -272,6 +272,11 @@ def figure_value(key, value, src):
         if not value:
             src.fail(key, 'must not be empty')
         return value
+    if key == 'text_color':
+        low = value.strip().lower()
+        if low in ('black', 'level'):
+            return low
+        src.fail(key, f'use black or level, got {value!r}')
     if key == 'format':
         value = value.lower()
         if value not in ('pdf', 'png', 'jpg', 'jpeg', 'svg', 'eps', 'ps', 'pgf'):
