@@ -81,9 +81,10 @@ class ED:
         self.title_size = 11
         self.label_offsets = []
         self.label_dx_offsets = []
-        # tiny white space between a level line and its label connector, as a
-        # fraction of the level-line length (0 disables the gap)
-        self.label_line_gap = 0.01
+        # white space at each end of a label connector (level-line side and
+        # label side), as a fraction of the level-line length; clamped to 40%
+        # of the connector span so a visible line always remains
+        self.label_line_gap = 0.03
         
     def fig_parameters(self, figratiox, figratioy, dpi, x_figsize, y_figsize, yminor, ymajor):
         '''
@@ -128,9 +129,9 @@ class ED:
          label_line : bool
                  Draw a thin black connector from the end of the level line
                  to the side label (left_text/right_text) of this level. The
-                 connector starts label_line_gap (fraction of the level-line
-                 length) past the end of the line, leaving a tiny white gap.
-                 (default False)
+                 connector is inset by label_line_gap (fraction of the
+                 level-line length) at BOTH ends, leaving a white gap next to
+                 the level line and next to the label. (default False)
 
 
 
@@ -542,22 +543,24 @@ class ED:
                     clip_on=clip_texts)
 
             if self.label_lines[i-1]:
-                # thin black connector from just past the end of the level
-                # line to the side label; label_line_gap leaves a tiny white
-                # space between the level line and the connector, and the
-                # connector follows the label_dx/label_dy label shift
+                # thin black connector between the level line and the side
+                # label; it is inset by label_line_gap at BOTH ends (white
+                # space next to the level line and next to the label), and it
+                # follows the label_dx/label_dy label shift. The inset is
+                # clamped to 40% of the span so a visible line remains.
                 dy = self.label_offsets[i-1]
                 dx = self.label_dx_offsets[i-1]
-                gap = self.label_line_gap*self.dimension
+                def _leader(x_line_end, x_label_anchor):
+                    span = x_label_anchor - x_line_end
+                    g = min(self.label_line_gap*self.dimension, 0.4*abs(span))
+                    s = 1 if span >= 0 else -1
+                    return Line2D([x_line_end + s*g, x_label_anchor - s*g],
+                                  [level[0], level[0]+dy],
+                                  color='k', linewidth=0.75, zorder=4)
                 if level[5]:  # left_text is drawn just past the right end of the line
-                    x_end = start + self.dimension
-                    ax.add_line(Line2D([x_end + gap, x_end*1.01 + dx],
-                                       [level[0], level[0]+dy],
-                                       color='k', linewidth=0.75, zorder=4))
+                    ax.add_line(_leader(start + self.dimension, (start + self.dimension)*1.01 + dx))
                 if level[6]:  # right_text is drawn just before the left end of the line
-                    ax.add_line(Line2D([start - gap, start*0.97 + dx],
-                                       [level[0], level[0]+dy],
-                                       color='k', linewidth=0.75, zorder=4))
+                    ax.add_line(_leader(start, start*0.97 + dx))
             i += 1
 
         if show_IDs:

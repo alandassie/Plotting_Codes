@@ -215,10 +215,14 @@ name = Example
         xdata, ydata = leaders[0].get_xdata(), leaders[0].get_ydata()
         start = fig.positions[1]*(fig.dimension+fig.space)
         x_end = start + fig.dimension
-        # tiny white gap between the level line and the connector start
-        self.assertAlmostEqual(xdata[0], x_end + fig.label_line_gap*fig.dimension)
-        self.assertGreater(xdata[0], x_end)  # the connector does not touch the line
-        self.assertAlmostEqual(xdata[1], x_end*1.01)  # label anchor (label_dx defaults to 0)
+        x_anchor = x_end*1.01  # label anchor (label_dx defaults to 0)
+        g = min(fig.label_line_gap*fig.dimension, 0.4*abs(x_anchor-x_end))
+        # white gap at BOTH ends: the connector touches neither the line nor the label
+        self.assertAlmostEqual(xdata[0], x_end + g)
+        self.assertGreater(xdata[0], x_end)
+        self.assertAlmostEqual(xdata[1], x_anchor - g)
+        self.assertLess(xdata[1], x_anchor)
+        self.assertLess(xdata[0], xdata[1])  # a visible line remains
         self.assertAlmostEqual(ydata[0], 1)
         self.assertAlmostEqual(ydata[1], 1)  # label_dy defaults to 0
 
@@ -248,25 +252,37 @@ name = B
             self.assertEqual(main([str(self.path), '-o', str(output)]), 0)
         fig = instances[0]
         pitch = fig.dimension + fig.space
-        gap = fig.label_line_gap*fig.dimension
+        def inset(x_line_end, x_anchor):
+            span = x_anchor - x_line_end
+            g = min(fig.label_line_gap*fig.dimension, 0.4*abs(span))
+            s = 1 if span >= 0 else -1
+            return (x_line_end + s*g, x_anchor - s*g), g
         leaders = [ln for ln in fig.ax.lines if ln.get_color() == 'k' and ln.get_linewidth() == 0.75]
         self.assertEqual(len(leaders), 2)
         by_y0 = {ln.get_ydata()[0]: ln for ln in leaders}
         # level 100 (position 1, jpi=left -> label on the LEFT side of the line)
         start0 = 1*pitch
+        anchor0 = start0*0.97 + 0.03
+        (x_from, x_to), g0 = inset(start0, anchor0)
         left_line = by_y0[0]
         xdata, ydata = left_line.get_xdata(), left_line.get_ydata()
-        self.assertAlmostEqual(xdata[0], start0 - gap)              # white gap at the line end
-        self.assertAlmostEqual(xdata[1], start0*0.97 + 0.03)         # label anchor follows label_dx
-        self.assertAlmostEqual(ydata[1], 0 + 0.02)                   # label_dy
+        self.assertAlmostEqual(xdata[0], x_from)   # inset at the level-line end
+        self.assertAlmostEqual(xdata[1], x_to)     # inset at the label end (follows label_dx)
+        self.assertNotEqual(xdata[0], start0)      # does not touch the level line
+        self.assertNotEqual(xdata[1], anchor0)     # does not touch the label
+        self.assertAlmostEqual(ydata[1], 0 + 0.02)  # label_dy
         # level 101 (position 2, jpi=right -> label on the RIGHT side of the line)
         start1 = 2*pitch
         x_end1 = start1 + fig.dimension
+        anchor1 = x_end1*1.01 - 0.01
+        (x_from, x_to), g1 = inset(x_end1, anchor1)
         right_line = by_y0[1]
         xdata, ydata = right_line.get_xdata(), right_line.get_ydata()
-        self.assertAlmostEqual(xdata[0], x_end1 + gap)               # white gap at the line end
-        self.assertAlmostEqual(xdata[1], x_end1*1.01 - 0.01)         # label anchor follows label_dx
-        self.assertAlmostEqual(ydata[1], 1 - 0.04)                   # label_dy
+        self.assertAlmostEqual(xdata[0], x_from)
+        self.assertAlmostEqual(xdata[1], x_to)
+        self.assertNotEqual(xdata[0], x_end1)
+        self.assertNotEqual(xdata[1], anchor1)
+        self.assertAlmostEqual(ydata[1], 1 - 0.04)  # label_dy
         # the side label texts themselves sit at the shifted anchors
         side_labels = [t for t in fig.ax.texts if t.get_text().startswith('$1/2')]
         self.assertEqual(len(side_labels), 2)
