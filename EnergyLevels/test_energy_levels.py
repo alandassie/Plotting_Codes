@@ -118,6 +118,56 @@ class Inputs(unittest.TestCase):
         self.assertEqual(again.datasets, config.datasets)
         self.assertIn('label_dx=0.05', self.path.read_text())
 
+    def test_name_pos_setting(self):
+        # default is auto (x tick label under the column center)
+        self.assertEqual(self.parse(self.text).datasets[0].name_pos, 'auto')
+        text = self.text.replace('name = Exp-$^{39}$Ca-',
+                                 'name = Exp-$^{39}$Ca-\nname_pos = 2.5, 0.8')
+        config = self.parse(text)
+        self.assertEqual(config.datasets[0].name_pos, (2.5, 0.8))
+        self.assertEqual(config.datasets[1].name_pos, 'auto')
+        self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
+                                   'name = Exp-$^{39}$Ca-\nname_pos = 2.5'), 'x, y')
+        self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
+                                   'name = Exp-$^{39}$Ca-\nname_pos = banana, 1'), 'finite number')
+        self.bad(self.text.replace('name = Exp-$^{39}$Ca-',
+                                   'name = Exp-$^{39}$Ca-\nname_posx = 1, 2'), 'dataset settings are')
+        # round-trips through write_input
+        config = self.parse(text)
+        write_input(config, self.path)
+        again = read_input(self.path)
+        self.assertEqual(again.datasets, config.datasets)
+        self.assertIn('name_pos = 2.5, 0.8', self.path.read_text())
+
+    def test_text_sections(self):
+        # no text sections by default
+        self.assertEqual(self.parse(self.text).texts, [])
+        text = (self.text
+                + '\n[text 1]\nx = 1.5\ny = -0.2\nlabel = g.s.\nsize = 9\n'
+                + '\n[text 2]\nx = 0\ny = 0.5\nlabel = "a note"\n')
+        config = self.parse(text)
+        self.assertEqual(len(config.texts), 2)
+        t1, t2 = config.texts
+        self.assertEqual((t1.x, t1.y, t1.label, t1.size), (1.5, -0.2, 'g.s.', 9.0))
+        self.assertEqual((t2.x, t2.y, t2.label, t2.size), (0.0, 0.5, 'a note', None))
+        # errors
+        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\n', 'needs x, y, and label')
+        self.bad(self.text + '\n[text 1]\nx = 1\nlabel = a\n', 'needs x, y, and label')
+        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\nlabel = a\nfoo = 3\n', 'text settings are')
+        self.bad(self.text + '\n[text 1]\nx = 1\ny = 2\nlabel = a\nsize = 0\n', 'greater than zero')
+        self.bad(self.text + '\n[text 1]\nx = q\ny = 2\nlabel = a\n', 'finite number')
+        self.bad(self.text + '\n[text 1]\nx = 1\nx = 2\ny = 2\nlabel = a\n', 'duplicate setting')
+        # round-trips through write_input
+        config = self.parse(text)
+        write_input(config, self.path)
+        again = read_input(self.path)
+        self.assertEqual(again.texts, config.texts)
+        self.assertEqual(again.datasets, config.datasets)
+        written = self.path.read_text()
+        self.assertIn('[text 1]', written)
+        self.assertIn('label = "a note"', written)
+        self.assertIn('size = 9.0', written)
+
     def test_label_line_figure_default(self):
         config = self.parse(self.text.replace('label_line = no', 'label_line = yes'))
         self.assertIs(config.figure['label_line'], True)
@@ -291,6 +341,64 @@ name = B
         self.assertAlmostEqual(by_y[0.96].get_x(), x_end1*1.01 - 0.01)
         # label_dx=0 keeps the default anchor (gap only)
         self.assertAlmostEqual(fig.label_dx_offsets, [0.03, -0.01])
+
+    def test_render_name_pos_and_free_text(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        from energydiagram import ED
+        self.path.write_text('''[figure]
+format = pdf
+[dataset 1]
+name = A
+name_pos = 0.3, 0.9
+[levels 1]
+100 0 -1 -1 1/2 + -1 left None None
+[dataset 2]
+name = B
+[levels 2]
+101 1 -1 -1 1/2 + -1 right None None
+[text 1]
+x = 1.2
+y = 0.5
+label = hello
+size = 12
+[text 2]
+x = 0.1
+y = 0.2
+label = note
+''')
+        output = self.path.with_suffix('.pdf')
+        instances = []
+        class Capture(ED):
+            def __init__(self):
+                super().__init__()
+                instances.append(self)
+        with patch('energydiagram.ED', Capture), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.path), '-o', str(output)]), 0)
+        fig = instances[0]
+        # B keeps the default: x tick label at its column center; A is not a tick label
+        self.assertEqual([l.get_text() for l in fig.ax.get_xticklabels()], ['B'])
+        pitch = fig.dimension + fig.space
+        self.assertAlmostEqual(fig.ax.get_xticks()[0], 2*pitch + fig.dimension/2)
+        # A is drawn as a text at the explicit (x, y), at title_size
+        self.assertEqual(fig.name_pos, {1: (0.3, 0.9)})
+        names = [t for t in fig.ax.texts if t.get_text() == 'A']
+        self.assertEqual(len(names), 1)
+        self.assertAlmostEqual(names[0].get_x(), 0.3)
+        self.assertAlmostEqual(names[0].get_y(), 0.9)
+        self.assertEqual(names[0].get_fontsize(), fig.title_size)
+        # free texts land at their coordinates, with size or the default font_size
+        self.assertEqual(len(fig.free_texts), 2)
+        hello = [t for t in fig.ax.texts if t.get_text() == 'hello']
+        note = [t for t in fig.ax.texts if t.get_text() == 'note']
+        self.assertEqual(len(hello), 1)
+        self.assertAlmostEqual(hello[0].get_x(), 1.2)
+        self.assertAlmostEqual(hello[0].get_y(), 0.5)
+        self.assertEqual(hello[0].get_fontsize(), 12)
+        self.assertEqual(len(note), 1)
+        self.assertAlmostEqual(note[0].get_x(), 0.1)
+        self.assertAlmostEqual(note[0].get_y(), 0.2)
+        self.assertEqual(note[0].get_fontsize(), fig.font_size)
 
     def test_axis_break_setting(self):
         config = self.parse(self.text.replace('axis_break = none', 'axis_break = 1.1, 2.4'))

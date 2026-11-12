@@ -69,11 +69,14 @@ def render(config, args):
             figure.add_level(s.energy-f['reference_energy'], bottom_text=s.bottom,
                              top_text=s.top, position=None if i == 0 else 'last',
                              set_title=ds.name if i == 0 else '',
+                             set_title_pos=ds.name_pos if (i == 0 and ds.name_pos != 'auto') else None,
                              color=s.options.get('color', ds.color),
                              linestyle=s.options.get('linestyle', ds.linestyle),
                              label_dy=s.options.get('label_dy', 0),
                              label_dx=s.options.get('label_dx', 0),
                              label_line=s.options.get('label_line', f['label_line']), **kwargs)
+    for t in config.texts:
+        figure.add_text(t.x, t.y, t.label, t.size)
     for s in states:
         index = mapping[s.id]
         if s.width > 0:

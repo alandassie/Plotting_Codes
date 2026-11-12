@@ -1,4 +1,4 @@
-# Addendum to the EnergyLevels input guide (updated 11 November 2026)
+# Addendum to the EnergyLevels input guide (updated 12 November 2026)
 
 New input options, available in the readable `[figure]` / `[levels N]` format.
 Legacy `OUTPUT FILE` inputs keep the previous behavior (all new settings take
@@ -60,9 +60,10 @@ label anchor, so it follows `label_dy`. It is drawn only when the state has a
 side label (`jpi` left or right). Values `yes/no/true/false/1/0` are accepted,
 case-insensitive. `--convert` writes the option back as `label_line=yes/no`.
 
-The connector does not touch the level line: it starts a tiny white gap past
-the end of the line (1% of the level-line length, the `ED.label_line_gap`
-code constant), so the black line is visually separate from the level line.
+The connector touches neither the level line nor the label: it is inset at
+both ends, leaving a white gap on each side (3% of the level-line length per
+end, the `ED.label_line_gap` code constant, clamped so a visible line always
+remains), so the black line is clearly separate from both.
 
 ## 3b / Horizontal label shift — per-state option `label_dx`
 
@@ -156,3 +157,51 @@ errorbar_head = 10.0   # default
 # errorbar_head = 4.0  # smaller caps, like in the reference figures
 # errorbar_head = 0    # no caps at all
 ```
+
+## 8 / Dataset name position — `[dataset N]` setting `name_pos`
+
+| Setting | Default | Meaning / allowed values |
+| --- | --- | --- |
+|  name_pos | auto | `auto`, or two comma-separated numbers `x, y` in data coordinates. `auto` draws the dataset `name` as an x tick label centered under its column, below the bottom panel (the behavior of section 2). `x, y` instead draws the name as a regular centered text at that position, at `title_size` points, and the column then has no tick label. With an axis break the name is drawn on the panel that contains the given y. |
+
+```ini
+[dataset 1]
+name = Exp-$^{39}$Ca-
+name_pos = auto        # default: tick label under the column center
+# name_pos = 2.5, 0.8  # draw "Exp-$^{39}$Ca-" as a text at x=2.5, y=0.8
+```
+
+Use this to move a column title out from under the axis, e.g. above the
+column or into empty space. Invalid values (a single number, non-numbers) are
+rejected with a diagnostic. `--convert` writes the setting back as
+`name_pos = x, y` (omitted when `auto`). Not available in the legacy
+`OUTPUT FILE` format (it stays `auto`).
+
+## 9 / Free-floating text — `[text N]` sections
+
+Add any text anywhere in the plot, in data coordinates. Each section needs
+`x`, `y`, and `label`; `size` is optional:
+
+| Setting | Default | Meaning / allowed values |
+| --- | --- | --- |
+|  x, y | required | Position in data coordinates (same units as the energies and column positions). With an axis break the text is drawn on the panel containing y. |
+|  label | required | The text itself. Quote it if it contains spaces (`label = "some note"`); math is fine (`label = "$\Lambda$"`). |
+|  size | font_size | Font size in points; must be > 0. |
+
+```ini
+[text 1]
+x = 0.5
+y = 1.2
+label = "some note"
+size = 9.0
+
+[text 2]
+x = 2.0
+y = -0.5
+label = g.s.
+```
+
+Sections may appear in any order and need not be numbered contiguously, but
+each `[text N]` must be unique. Missing `x`, `y`, or `label`, unknown keys,
+and duplicate keys are rejected with a diagnostic naming the line.
+`--convert` writes the sections back (quoting the label when needed).

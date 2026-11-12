@@ -39,12 +39,22 @@ class Dataset:
     color: int
     linestyle: str
     levels: list
+    name_pos: object = 'auto'  # 'auto' or an (x, y) tuple of data coordinates
+
+@dataclass
+class TextItem:
+    x: float
+    y: float
+    label: str
+    size: object = None  # font size in points; None -> figure font_size
+    source: Source = field(compare=False, default=None)
 
 @dataclass
 class Config:
     figure: dict
     datasets: list
     legacy: bool = False
+    texts: list = field(default_factory=list)
 
 DEFAULTS = dict(output='energy_levels', format='pdf', dpi=350., size_px=(1200., 900.),
                 ticks=(.02, .2), x_margin=.5, y_margin=.05, width_alpha=.4,
@@ -54,6 +64,66 @@ DEFAULTS = dict(output='energy_levels', format='pdf', dpi=350., size_px=(1200., 
 STYLES = ('-', '--', ':', '-.')
 ALIASES = dict(C='color', LS='linestyle', L='link', LC='link_color', LLS='link_style', LLW='link_width')
 OPTIONS = ('color', 'linestyle', 'link', 'link_color', 'link_style', 'link_width', 'label_dy', 'label_dx', 'label_line')
+
+def quote_label(text):
+    text = text or 'None'
+    if '"' not in text:
+        return '"' + text + '"' if any(c.isspace() for c in text) or "'" in text else text
+    if "'" not in text:
+        return "'" + text + "'"
+    raise InputError('Labels containing both quote types cannot be converted automatically.')
+
+def unquote(value, src, key):
+    """Strip one pair of surrounding quotes from a setting value, shlex-style,
+    so labels with spaces round-trip through write_input/read_input."""
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        lexer = shlex.shlex(v, posix=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        lexer.escape = ''  # Preserve LaTeX backslashes, including inside quotes.
+        try:
+            parts = list(lexer)
+        except ValueError as exc:
+            src.fail(key, str(exc))
+        if len(parts) != 1:
+            src.fail(key, f'expected a single quoted string, got {value!r}')
+        return parts[0]
+    return value
+
+def name_pos_value(value, src):
+    if value.strip().lower() in ('auto', ''):
+        return 'auto'
+    parts = value.split(',')
+    if len(parts) != 2:
+        src.fail('name_pos', 'use auto, or two comma-separated numbers: x, y')
+    return tuple(number(p.strip(), src, 'name_pos') for p in parts)
+
+def text_entry(head, rows):
+    values = {}
+    for src in rows:
+        if '=' not in src.text:
+            src.fail('setting', 'expected key = value')
+        key, val = (v.strip() for v in src.text.split('=', 1))
+        if key in values:
+            src.fail(key, 'duplicate setting')
+        if key not in ('x', 'y', 'label', 'size'):
+            src.fail(key, 'text settings are x, y, label, and size')
+        values[key] = (val, src)
+    for req in ('x', 'y', 'label'):
+        if req not in values:
+            head.fail(req, 'a [text N] section needs x, y, and label settings')
+    x = number(values['x'][0], values['x'][1], 'x')
+    y = number(values['y'][0], values['y'][1], 'y')
+    size = None
+    if 'size' in values:
+        size = number(values['size'][0], values['size'][1], 'size')
+        if size <= 0:
+            values['size'][1].fail('size', 'must be greater than zero')
+    label = unquote(values['label'][0], values['label'][1], 'label')
+    if not label:
+        values['label'][1].fail('label', 'must not be empty')
+    return TextItem(x, y, label, size, values['label'][1])
 
 def number(value, src, key, integer=False, minimum=None, maximum=None):
     try:
@@ -224,8 +294,8 @@ def read_input(path):
             if match:
                 current = match[1].strip()
                 src.section = current
-                if current != 'figure' and not re.fullmatch(r'(dataset|levels) [1-9]\d*', current):
-                    src.fail('section', 'expected [figure], [dataset N], or [levels N]')
+                if current != 'figure' and not re.fullmatch(r'(dataset|levels|text) [1-9]\d*', current):
+                    src.fail('section', 'expected [figure], [dataset N], [levels N], or [text N]')
                 if current in sections:
                     src.fail('section', 'duplicate section')
                 sections[current] = (src, [])
@@ -236,12 +306,15 @@ def read_input(path):
         if 'figure' not in sections:
             raise InputError(f'{path}: missing [figure] section')
         fig = DEFAULTS.copy()
-        metadata, tables = {}, {}
+        metadata, tables, texts = {}, {}, {}
         for section, (head, rows) in sections.items():
             if section.startswith('levels '):
                 tables[section.split()[1]] = [level(s) for s in rows]
                 if not rows:
                     head.fail('levels', 'provide at least one state row')
+                continue
+            if section.startswith('text '):
+                texts[section.split()[1]] = text_entry(head, rows)
                 continue
             values = {}
             for src in rows:
@@ -253,12 +326,14 @@ def read_input(path):
                 values[key] = val
                 if section == 'figure':
                     fig[key] = figure_value(key, val, src)
-                elif key not in ('name', 'color', 'linestyle'):
-                    src.fail(key, 'dataset settings are name, color, and linestyle')
+                elif key not in ('name', 'color', 'linestyle', 'name_pos'):
+                    src.fail(key, 'dataset settings are name, color, linestyle, and name_pos')
                 elif key == 'color':
                     number(val, src, key, True, -1, 9)
                 elif key == 'linestyle':
                     style(val, src, key)
+                elif key == 'name_pos':
+                    values[key] = name_pos_value(val, src)
             if section != 'figure':
                 metadata[section.split()[1]] = (head, values)
         if set(metadata) != set(tables):
@@ -268,8 +343,9 @@ def read_input(path):
         for ident in sorted(metadata, key=int):
             head, values = metadata[ident]
             datasets.append(Dataset(values.get('name', ''), int(values.get('color', '-1')),
-                                    values.get('linestyle', '-'), tables[ident]))
-        config = Config(fig, datasets)
+                                    values.get('linestyle', '-'), tables[ident],
+                                    values.get('name_pos', 'auto')))
+        config = Config(fig, datasets, texts=[texts[k] for k in sorted(texts, key=int)])
     validate(config, path)
     return config
 
@@ -364,17 +440,17 @@ def write_input(config, path):
         out.append(f'{key} = {fmt(value)}')
     for i, ds in enumerate(config.datasets, 1):
         out += ['', f'[dataset {i}]', f'name = {ds.name}', f'color = {ds.color}',
-                f'linestyle = {ds.linestyle}', '', f'[levels {i}]',
+                f'linestyle = {ds.linestyle}']
+        if ds.name_pos != 'auto':
+            out.append(f'name_pos = {fmt(ds.name_pos)}')
+        out += ['', f'[levels {i}]',
                 '# id energy width uncertainty j parity label_index jpi bottom top [options]']
         for s in ds.levels:
-            def label(text):
-                text = text or 'None'
-                if '"' not in text:
-                    return '"' + text + '"' if any(c.isspace() for c in text) or "'" in text else text
-                if "'" not in text:
-                    return "'" + text + "'"
-                raise InputError('Labels containing both quote types cannot be converted automatically.')
             parts = [s.id, s.energy, s.width, s.uncertainty, s.j, s.parity,
-                     s.label_index, s.jpi, label(s.bottom), label(s.top)]
+                     s.label_index, s.jpi, quote_label(s.bottom), quote_label(s.top)]
             out.append('  '.join(map(str, parts)) + ''.join(f'  {k}={fmt(v)}' for k, v in s.options.items()))
+    for i, t in enumerate(config.texts, 1):
+        out += ['', f'[text {i}]', f'x = {t.x}', f'y = {t.y}', f'label = {quote_label(t.label)}']
+        if t.size is not None:
+            out.append(f'size = {t.size}')
     Path(path).write_text('\n'.join(out)+'\n', encoding='utf-8')

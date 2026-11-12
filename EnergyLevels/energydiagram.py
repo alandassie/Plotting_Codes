@@ -54,6 +54,8 @@ class ED:
         self.left_texts = []
         self.right_texts = []
         self.set_title = []
+        self.name_pos = {}  # column position -> explicit (x, y) for the dataset name
+        self.free_texts = []  # (x, y, text, size) free-floating labels
         self.links = []
         self.linestyle = []
         self.label_lines = []
@@ -100,7 +102,7 @@ class ED:
 
     def add_level(self, energy, bottom_text='', position=None, color='k',
                   top_text='Energy', right_text='', left_text='', set_title=None,linestyle='-', label_dy=0,
-                  label_dx=0, label_line=False):
+                  label_dx=0, label_line=False, set_title_pos=None):
         '''
         Method of ED class
         This method add a new energy level to the plot.
@@ -132,6 +134,11 @@ class ED:
                  connector is inset by label_line_gap (fraction of the
                  level-line length) at BOTH ends, leaving a white gap next to
                  the level line and next to the label. (default False)
+         set_title_pos : tuple or None
+                 Explicit (x, y) data coordinates for the dataset name
+                 (set_title) of this level's column. None keeps the default:
+                 the name is drawn as an x tick label under the column center.
+                 (default None)
 
 
 
@@ -163,6 +170,24 @@ class ED:
         self.label_dx_offsets.append(label_dx)
         self.linestyle.append(linestyle)
         self.label_lines.append(bool(label_line))
+        if set_title and set_title_pos is not None:
+            self.name_pos[position] = tuple(set_title_pos)
+
+    def add_text(self, x, y, text, size=None):
+        '''
+        Method of ED class
+        Add a free-floating text label at data coordinates (x, y).
+
+        Parameters
+        ----------
+        x, y : float
+               Position in data coordinates
+        text : str
+               The text to draw
+        size : float or None
+               Font size in points; None uses self.font_size (default None)
+        '''
+        self.free_texts.append((x, y, text, size))
 
     def add_arrow(self, start_level_id, end_level_id):
         '''
@@ -388,8 +413,8 @@ class ED:
             if title:
                 titles.setdefault(pos, str(title))
         for j, ax in enumerate(axes):
-            if titles:
-                order = sorted(titles)
+            order = [p for p in sorted(titles) if p not in self.name_pos]
+            if order:
                 centers = [p*(self.dimension+self.space) + self.dimension/2. for p in order]
                 ax.set_xticks(centers)
                 ax.set_xticklabels([titles[p] for p in order], fontsize=self.title_size)
@@ -410,6 +435,24 @@ class ED:
             if self.axis_break is None:
                 ax.set_ylabel(self.fig_yaxis_label, fontsize=self.title_size, labelpad=self.ylabel_pad)
             self.__draw(ax, colors, show_IDs, minenergy, clip_texts)
+
+        # Dataset names with an explicit position, and free texts, are drawn
+        # once as plain text on the panel that contains their y coordinate
+        # (clipped per panel when axis breaks are active).
+        for pos, (tx, ty) in self.name_pos.items():
+            title = titles.get(pos)
+            if title:
+                self.ax_for_energy(ty).text(tx, ty, title,
+                                            horizontalalignment='center',
+                                            verticalalignment='center',
+                                            fontsize=self.title_size,
+                                            clip_on=clip_texts)
+        for tx, ty, text, size in self.free_texts:
+            self.ax_for_energy(ty).text(tx, ty, text,
+                                        horizontalalignment='center',
+                                        verticalalignment='center',
+                                        fontsize=size if size is not None else self.font_size,
+                                        clip_on=clip_texts)
 
         if self.axis_break is not None:
             # With breaks, each link is drawn once as a straight line in display
